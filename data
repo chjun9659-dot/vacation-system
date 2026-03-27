@@ -1,0 +1,96 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+
+st.set_page_config(page_title="연차 관리 시스템", layout="wide")
+
+st.title("📊 연차 사용 관리 프로그램")
+
+FFILE_PATH = "회사 연차사용.xlsx"
+
+# -----------------------------
+# 데이터 불러오기
+# -----------------------------
+@st.cache_data
+def load_data():
+    df = pd.read_excel(FILE_PATH)
+    return df
+
+def save_data(df):
+    df.to_excel(FILE_PATH, index=False)
+
+df = load_data()
+
+# -----------------------------
+# 직원 선택
+# -----------------------------
+st.subheader("👤 직원 선택")
+
+names = df["이름"].dropna().unique().tolist()
+selected_name = st.selectbox("직원 선택", names)
+
+employee = df[df["이름"] == selected_name].iloc[0]
+
+# -----------------------------
+# 현재 연차 정보
+# -----------------------------
+st.subheader("📌 현재 연차 현황")
+
+col1, col2, col3 = st.columns(3)
+
+total = employee["발생 연차"]
+used = employee["사용 연차"]
+remain = employee["잔여 연차"]
+
+col1.metric("총 연차", total)
+col2.metric("사용 연차", used)
+col3.metric("잔여 연차", remain)
+
+# -----------------------------
+# 연차 사용 입력
+# -----------------------------
+st.subheader("📝 연차 사용 입력")
+
+use_date = st.date_input("사용 날짜 선택", datetime.today())
+
+if st.button("연차 사용 등록"):
+
+    idx = df[df["이름"] == selected_name].index[0]
+
+    # 사용일 컬럼 찾기
+    for i in range(1, 31):
+        col = f"사용일{i}"
+        if pd.isna(df.loc[idx, col]):
+            df.loc[idx, col] = use_date
+            break
+
+    # 사용 연차 증가
+    df.loc[idx, "사용 연차"] += 1
+
+    # 잔여 연차 계산
+    df.loc[idx, "잔여 연차"] = df.loc[idx, "발생 연차"] - df.loc[idx, "사용 연차"]
+
+    save_data(df)
+
+    st.success("연차 등록 완료!")
+    st.rerun()
+
+# -----------------------------
+# 전체 현황 보기
+# -----------------------------
+st.subheader("📋 전체 연차 현황")
+
+st.dataframe(df, use_container_width=True)
+
+# -----------------------------
+# 엑셀 다운로드
+# -----------------------------
+st.subheader("⬇️ 엑셀 다운로드")
+
+with open(FILE_PATH, "rb") as f:
+    st.download_button(
+        label="엑셀 다운로드",
+        data=f,
+        file_name="연차현황.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
