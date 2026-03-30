@@ -809,6 +809,9 @@ def schedule_page():
 
     st.divider()
 
+    # ---------------------------
+    # 1. 시공 일정 등록
+    # ---------------------------
     st.subheader("1. 시공 일정 등록")
 
     with st.form("add_schedule_form_unique"):
@@ -847,184 +850,196 @@ def schedule_page():
 
     st.divider()
 
-    st.subheader("2. 오늘 일정")
+    # ---------------------------
+    # 2. 오늘 일정
+    # ---------------------------
+    with st.expander("📅 2. 오늘 일정", expanded=False):
+        today_df = df[df["날짜"] == today_str].copy()
 
-    today_df = df[df["날짜"] == today_str].copy()
-
-    if today_df.empty:
-        st.info("오늘 일정이 없습니다.")
-    else:
-        show_today = today_df[["날짜", "설치현장", "시공담당", "수량", "비고", "상태", "완료일"]]
-        st.dataframe(show_today, use_container_width=True, hide_index=True)
-
-    st.divider()
-
-    st.subheader("3. 시공 일정 보기")
-
-    managers = ["전체"] + sorted([m for m in df["시공담당"].dropna().unique().tolist() if str(m).strip() != ""])
-
-    f1, f2, f3, f4 = st.columns(4)
-    status_filter = f1.selectbox("상태 선택", ["전체", "진행중", "완료"], key="sch_status_filter_unique")
-    manager_filter = f2.selectbox("담당자 선택", managers, key="sch_manager_filter_unique")
-    date_filter = f3.selectbox("날짜 기준", ["전체", "오늘", "미래", "지난 일정"], key="sch_date_filter_unique")
-    keyword = f4.text_input("검색", placeholder="설치현장 / 비고 검색", key="sch_keyword_unique")
-
-    filtered_df = df.copy()
-
-    if status_filter != "전체":
-        filtered_df = filtered_df[filtered_df["상태"] == status_filter]
-
-    if manager_filter != "전체":
-        filtered_df = filtered_df[filtered_df["시공담당"] == manager_filter]
-
-    if date_filter == "오늘":
-        filtered_df = filtered_df[filtered_df["날짜"] == today_str]
-    elif date_filter == "미래":
-        filtered_df = filtered_df[filtered_df["날짜"] > today_str]
-    elif date_filter == "지난 일정":
-        filtered_df = filtered_df[filtered_df["날짜"] < today_str]
-
-    if keyword.strip():
-        kw = keyword.strip()
-        filtered_df = filtered_df[
-            filtered_df["설치현장"].astype(str).str.contains(kw, case=False, na=False) |
-            filtered_df["비고"].astype(str).str.contains(kw, case=False, na=False)
-        ]
-
-    show_df = filtered_df[["날짜", "설치현장", "시공담당", "수량", "비고", "상태", "완료일"]].copy()
-
-    if show_df.empty:
-        st.info("조건에 맞는 일정이 없습니다.")
-    else:
-        st.dataframe(show_df, use_container_width=True, hide_index=True)
+        if today_df.empty:
+            st.info("오늘 일정이 없습니다.")
+        else:
+            show_today = today_df[["날짜", "설치현장", "시공담당", "수량", "비고", "상태", "완료일"]]
+            st.dataframe(show_today, use_container_width=True, hide_index=True)
 
     st.divider()
 
-    st.subheader("4. 일정 수정")
+    # ---------------------------
+    # 3. 시공 일정 보기
+    # ---------------------------
+    with st.expander("📋 3. 시공 일정 보기", expanded=False):
+        managers = ["전체"] + sorted([m for m in df["시공담당"].dropna().unique().tolist() if str(m).strip() != ""])
 
-    if df.empty:
-        st.info("수정할 일정이 없습니다.")
-    else:
-        edit_options = [
-            f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']}"
-            for _, row in df.iterrows()
-        ]
+        f1, f2, f3, f4 = st.columns(4)
+        status_filter = f1.selectbox("상태 선택", ["전체", "진행중", "완료"], key="sch_status_filter_unique")
+        manager_filter = f2.selectbox("담당자 선택", managers, key="sch_manager_filter_unique")
+        date_filter = f3.selectbox("날짜 기준", ["전체", "오늘", "미래", "지난 일정"], key="sch_date_filter_unique")
+        keyword = f4.text_input("검색", placeholder="설치현장 / 비고 검색", key="sch_keyword_unique")
 
-        selected_edit = st.selectbox("수정할 일정 선택", edit_options, key="sch_edit_select_unique")
-        edit_idx = int(selected_edit.split("|")[0].strip())
-        edit_row = df.loc[df["row_id"] == edit_idx].iloc[0]
+        filtered_df = df.copy()
 
-        with st.form("edit_schedule_form_unique"):
-            e1, e2, e3 = st.columns(3)
-            edit_date = e1.date_input(
-                "시공 날짜 수정",
-                value=pd.to_datetime(edit_row["날짜"]).date() if str(edit_row["날짜"]).strip() else date.today(),
-                key="sch_edit_date_unique"
-            )
-            edit_site = e2.text_input("설치현장 수정", value=str(edit_row["설치현장"]), key="sch_edit_site_unique")
-            edit_manager = e3.text_input("시공담당 수정", value=str(edit_row["시공담당"]), key="sch_edit_manager_unique")
+        if status_filter != "전체":
+            filtered_df = filtered_df[filtered_df["상태"] == status_filter]
 
-            e4, e5, e6 = st.columns(3)
-            edit_qty = e4.number_input("수량 수정", min_value=0, step=1, value=int(edit_row["수량"]), key="sch_edit_qty_unique")
-            edit_note = e5.text_input("비고 수정", value=str(edit_row["비고"]), key="sch_edit_note_unique")
-            edit_status = e6.selectbox(
-                "상태 수정",
-                ["진행중", "완료"],
-                index=0 if edit_row["상태"] == "진행중" else 1,
-                key="sch_edit_status_unique"
-            )
+        if manager_filter != "전체":
+            filtered_df = filtered_df[filtered_df["시공담당"] == manager_filter]
 
-            edit_submit = st.form_submit_button("수정 저장")
+        if date_filter == "오늘":
+            filtered_df = filtered_df[filtered_df["날짜"] == today_str]
+        elif date_filter == "미래":
+            filtered_df = filtered_df[filtered_df["날짜"] > today_str]
+        elif date_filter == "지난 일정":
+            filtered_df = filtered_df[filtered_df["날짜"] < today_str]
 
-            if edit_submit:
+        if keyword.strip():
+            kw = keyword.strip()
+            filtered_df = filtered_df[
+                filtered_df["설치현장"].astype(str).str.contains(kw, case=False, na=False) |
+                filtered_df["비고"].astype(str).str.contains(kw, case=False, na=False)
+            ]
+
+        show_df = filtered_df[["날짜", "설치현장", "시공담당", "수량", "비고", "상태", "완료일"]].copy()
+
+        if show_df.empty:
+            st.info("조건에 맞는 일정이 없습니다.")
+        else:
+            st.dataframe(show_df, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ---------------------------
+    # 4. 일정 수정
+    # ---------------------------
+    with st.expander("✏️ 4. 일정 수정", expanded=False):
+        if df.empty:
+            st.info("수정할 일정이 없습니다.")
+        else:
+            edit_options = [
+                f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']}"
+                for _, row in df.iterrows()
+            ]
+
+            selected_edit = st.selectbox("수정할 일정 선택", edit_options, key="sch_edit_select_unique")
+            edit_idx = int(selected_edit.split("|")[0].strip())
+            edit_row = df.loc[df["row_id"] == edit_idx].iloc[0]
+
+            with st.form("edit_schedule_form_unique"):
+                e1, e2, e3 = st.columns(3)
+                edit_date = e1.date_input(
+                    "시공 날짜 수정",
+                    value=pd.to_datetime(edit_row["날짜"]).date() if str(edit_row["날짜"]).strip() else date.today(),
+                    key="sch_edit_date_unique"
+                )
+                edit_site = e2.text_input("설치현장 수정", value=str(edit_row["설치현장"]), key="sch_edit_site_unique")
+                edit_manager = e3.text_input("시공담당 수정", value=str(edit_row["시공담당"]), key="sch_edit_manager_unique")
+
+                e4, e5, e6 = st.columns(3)
+                edit_qty = e4.number_input("수량 수정", min_value=0, step=1, value=int(edit_row["수량"]), key="sch_edit_qty_unique")
+                edit_note = e5.text_input("비고 수정", value=str(edit_row["비고"]), key="sch_edit_note_unique")
+                edit_status = e6.selectbox(
+                    "상태 수정",
+                    ["진행중", "완료"],
+                    index=0 if edit_row["상태"] == "진행중" else 1,
+                    key="sch_edit_status_unique"
+                )
+
+                edit_submit = st.form_submit_button("수정 저장")
+
+                if edit_submit:
+                    save_df = df[EXPECTED_COLUMNS].copy()
+                    save_df.loc[edit_idx, "날짜"] = str(edit_date)
+                    save_df.loc[edit_idx, "설치현장"] = edit_site.strip()
+                    save_df.loc[edit_idx, "시공담당"] = edit_manager.strip()
+                    save_df.loc[edit_idx, "수량"] = int(edit_qty)
+                    save_df.loc[edit_idx, "비고"] = edit_note.strip()
+                    save_df.loc[edit_idx, "상태"] = edit_status
+
+                    if edit_status == "완료" and not str(save_df.loc[edit_idx, "완료일"]).strip():
+                        save_df.loc[edit_idx, "완료일"] = today_str
+                    elif edit_status == "진행중":
+                        save_df.loc[edit_idx, "완료일"] = ""
+
+                    save_schedule_data(save_df)
+                    st.success("수정 완료!")
+                    st.rerun()
+
+    st.divider()
+
+    # ---------------------------
+    # 5. 완료 처리
+    # ---------------------------
+    with st.expander("✅ 5. 완료 처리", expanded=False):
+        progress_df = df[df["상태"] == "진행중"].copy()
+
+        if progress_df.empty:
+            st.info("완료 처리할 일정이 없습니다.")
+        else:
+            complete_options = [
+                f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']} | 수량 {row['수량']}"
+                for _, row in progress_df.iterrows()
+            ]
+
+            selected_complete = st.selectbox("완료 처리 일정 선택", complete_options, key="sch_complete_select_unique")
+
+            if st.button("완료로 변경", key="sch_complete_btn_unique"):
+                complete_idx = int(selected_complete.split("|")[0].strip())
                 save_df = df[EXPECTED_COLUMNS].copy()
-                save_df.loc[edit_idx, "날짜"] = str(edit_date)
-                save_df.loc[edit_idx, "설치현장"] = edit_site.strip()
-                save_df.loc[edit_idx, "시공담당"] = edit_manager.strip()
-                save_df.loc[edit_idx, "수량"] = int(edit_qty)
-                save_df.loc[edit_idx, "비고"] = edit_note.strip()
-                save_df.loc[edit_idx, "상태"] = edit_status
-
-                if edit_status == "완료" and not str(save_df.loc[edit_idx, "완료일"]).strip():
-                    save_df.loc[edit_idx, "완료일"] = today_str
-                elif edit_status == "진행중":
-                    save_df.loc[edit_idx, "완료일"] = ""
-
+                save_df.loc[complete_idx, "상태"] = "완료"
+                save_df.loc[complete_idx, "완료일"] = today_str
                 save_schedule_data(save_df)
-                st.success("수정 완료!")
+                st.success("완료 처리되었습니다.")
                 st.rerun()
 
     st.divider()
 
-    st.subheader("5. 완료 처리")
+    # ---------------------------
+    # 6. 완료 취소
+    # ---------------------------
+    with st.expander("↩️ 6. 완료 취소", expanded=False):
+        done_df = df[df["상태"] == "완료"].copy()
 
-    progress_df = df[df["상태"] == "진행중"].copy()
+        if done_df.empty:
+            st.info("완료 취소할 일정이 없습니다.")
+        else:
+            cancel_options = [
+                f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']} | 수량 {row['수량']}"
+                for _, row in done_df.iterrows()
+            ]
 
-    if progress_df.empty:
-        st.info("완료 처리할 일정이 없습니다.")
-    else:
-        complete_options = [
-            f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']} | 수량 {row['수량']}"
-            for _, row in progress_df.iterrows()
-        ]
+            selected_cancel = st.selectbox("완료 취소 일정 선택", cancel_options, key="sch_cancel_select_unique")
 
-        selected_complete = st.selectbox("완료 처리 일정 선택", complete_options, key="sch_complete_select_unique")
-
-        if st.button("완료로 변경", key="sch_complete_btn_unique"):
-            complete_idx = int(selected_complete.split("|")[0].strip())
-            save_df = df[EXPECTED_COLUMNS].copy()
-            save_df.loc[complete_idx, "상태"] = "완료"
-            save_df.loc[complete_idx, "완료일"] = today_str
-            save_schedule_data(save_df)
-            st.success("완료 처리되었습니다.")
-            st.rerun()
-
-    st.divider()
-
-    st.subheader("6. 완료 취소")
-
-    done_df = df[df["상태"] == "완료"].copy()
-
-    if done_df.empty:
-        st.info("완료 취소할 일정이 없습니다.")
-    else:
-        cancel_options = [
-            f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']} | 수량 {row['수량']}"
-            for _, row in done_df.iterrows()
-        ]
-
-        selected_cancel = st.selectbox("완료 취소 일정 선택", cancel_options, key="sch_cancel_select_unique")
-
-        if st.button("진행중으로 변경", key="sch_cancel_btn_unique"):
-            cancel_idx = int(selected_cancel.split("|")[0].strip())
-            save_df = df[EXPECTED_COLUMNS].copy()
-            save_df.loc[cancel_idx, "상태"] = "진행중"
-            save_df.loc[cancel_idx, "완료일"] = ""
-            save_schedule_data(save_df)
-            st.success("완료 취소되었습니다.")
-            st.rerun()
+            if st.button("진행중으로 변경", key="sch_cancel_btn_unique"):
+                cancel_idx = int(selected_cancel.split("|")[0].strip())
+                save_df = df[EXPECTED_COLUMNS].copy()
+                save_df.loc[cancel_idx, "상태"] = "진행중"
+                save_df.loc[cancel_idx, "완료일"] = ""
+                save_schedule_data(save_df)
+                st.success("완료 취소되었습니다.")
+                st.rerun()
 
     st.divider()
 
-    st.subheader("7. 일정 삭제")
+    # ---------------------------
+    # 7. 일정 삭제
+    # ---------------------------
+    with st.expander("🗑️ 7. 일정 삭제", expanded=False):
+        if df.empty:
+            st.info("삭제할 일정이 없습니다.")
+        else:
+            delete_options = [
+                f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']} | 수량 {row['수량']}"
+                for _, row in df.iterrows()
+            ]
 
-    if df.empty:
-        st.info("삭제할 일정이 없습니다.")
-    else:
-        delete_options = [
-            f"{row['row_id']} | {row['날짜']} | {row['설치현장']} | {row['시공담당']} | 수량 {row['수량']}"
-            for _, row in df.iterrows()
-        ]
+            selected_delete = st.selectbox("삭제할 일정 선택", delete_options, key="sch_delete_select_unique")
 
-        selected_delete = st.selectbox("삭제할 일정 선택", delete_options, key="sch_delete_select_unique")
-
-        if st.button("선택 일정 삭제", key="sch_delete_btn_unique"):
-            delete_idx = int(selected_delete.split("|")[0].strip())
-            save_df = df[EXPECTED_COLUMNS].copy()
-            save_df = save_df.drop(index=delete_idx).reset_index(drop=True)
-            save_schedule_data(save_df)
-            st.success("삭제 완료!")
-            st.rerun()
+            if st.button("선택 일정 삭제", key="sch_delete_btn_unique"):
+                delete_idx = int(selected_delete.split("|")[0].strip())
+                save_df = df[EXPECTED_COLUMNS].copy()
+                save_df = save_df.drop(index=delete_idx).reset_index(drop=True)
+                save_schedule_data(save_df)
+                st.success("삭제 완료!")
+                st.rerun()
 
 
 # =========================================================
