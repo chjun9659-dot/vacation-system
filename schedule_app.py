@@ -160,7 +160,7 @@ st.divider()
 # ---------------------------
 # 5. 오늘 일정
 # ---------------------------
-st.subheader("2. 오늘 일정")
+with st.expander("📅 오늘 일정", expanded=False):
 
 today_df = df[df["날짜"] == today_str].copy()
 
@@ -176,7 +176,7 @@ st.divider()
 # ---------------------------
 # 6. 전체 일정 보기 / 필터
 # ---------------------------
-st.subheader("3. 시공 일정 보기")
+with st.expander("📋 시공 일정 보기", expanded=False):
 
 managers = ["전체"] + sorted([m for m in df["시공담당"].dropna().unique().tolist() if str(m).strip() != ""])
 
