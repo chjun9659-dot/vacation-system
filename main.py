@@ -2,10 +2,20 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime, date, timedelta
 from openpyxl import load_workbook
 import shutil
 import os
+import io
+import pickle
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+
+# 👉 여기에 넣으세요
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 
@@ -16,6 +26,7 @@ USERS = {
     "admin": {"password": "1234", "role": "관리자"},
     "staff": {"password": "1234", "role": "직원"},
     "시공": {"password": "1234", "role": "시공"},
+    "행정": {"password": "1234", "role": "관리자"},
 }
 
 if "logged_in" not in st.session_state:
@@ -696,12 +707,17 @@ def vacation_page():
 
 
 # =========================================================
-# 3. 구글시트 공통 설정
+# 3. 구글시트 / 구글드라이브 공통 설정
+# =========================================================
+# =========================================================
+# 3. 구글시트 / 구글드라이브 공통 설정
 # =========================================================
 SCOPE = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive"
 ]
+
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 
 @st.cache_resource
@@ -721,6 +737,65 @@ def get_gspread_client():
 
     except Exception as e:
         raise Exception(f"구글시트 인증 실패: {e}")
+
+
+@st.cache_resource
+def get_drive_service_oauth():
+    creds = None
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    token_path = os.path.join(base_dir, "token.pickle")
+    client_secret_path = os.path.join(base_dir, "client_secret.json")
+
+    if not os.path.exists(client_secret_path):
+        raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
+
+    if os.path.exists(token_path):
+        with open(token_path, "rb") as token:
+            creds = pickle.load(token)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                client_secret_path,
+                DRIVE_SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+
+        with open(token_path, "wb") as token:
+            pickle.dump(creds, token)
+
+    return build("drive", "v3", credentials=creds)
+
+
+def upload_file_to_drive(uploaded_file, folder_id=None):
+    try:
+        drive_service = get_drive_service_oauth()
+
+        file_stream = io.BytesIO(uploaded_file.getvalue())
+        file_metadata = {"name": uploaded_file.name}
+
+        if folder_id:
+            file_metadata["parents"] = [folder_id]
+
+        media = MediaIoBaseUpload(
+            file_stream,
+            mimetype=uploaded_file.type,
+            resumable=False
+        )
+
+        uploaded = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, name, webViewLink"
+        ).execute()
+
+        return uploaded.get("name", uploaded_file.name), uploaded.get("webViewLink", "")
+
+    except Exception as e:
+        raise Exception(f"파일 업로드 실패: {e}")
 
 
 # =========================================================
@@ -1034,12 +1109,10 @@ def schedule_page():
 # =========================================================
 # 5. 실사 관리 시스템
 # =========================================================
-# =========================================================
-# 5. 실사 관리 시스템
-# =========================================================
 INSPECTION_SHEET_NAME = "실사관리"
 INSPECTION_COLUMNS = [
     "요청일", "단지명", "상품구분", "수량", "주소", "영업담당자", "요청내용", "비고",
+    "첨부파일명", "첨부파일링크",
     "실사담당자", "실사예정일", "실사완료일", "진행상태", "실사결과", "특이사항", "후속조치",
     "계약여부", "계약일", "계약수량", "계약금액", "미계약사유"
 ]
@@ -1068,21 +1141,17 @@ def load_inspection_data():
         sheet = get_inspection_sheet()
         values = sheet.get_all_values()
 
-        # 완전 빈 시트면 헤더 생성 후 빈 DF 반환
         if not values:
-            sheet.update("A1:T1", [INSPECTION_COLUMNS])
+            sheet.update(f"A1:V1", [INSPECTION_COLUMNS])
             return pd.DataFrame(columns=INSPECTION_COLUMNS)
 
-        # 첫 줄 헤더 정리
         raw_header = [str(x).strip() for x in values[0]]
 
-        # 헤더가 부족하면 뒤에 필요한 컬럼명 채우기
         if len(raw_header) < len(INSPECTION_COLUMNS):
             raw_header = raw_header + INSPECTION_COLUMNS[len(raw_header):]
 
         raw_header = raw_header[:len(INSPECTION_COLUMNS)]
 
-        # 데이터 행
         data_rows = values[1:] if len(values) > 1 else []
 
         fixed_rows = []
@@ -1090,13 +1159,11 @@ def load_inspection_data():
             row = row + [""] * (len(INSPECTION_COLUMNS) - len(row))
             fixed_rows.append(row[:len(INSPECTION_COLUMNS)])
 
-        # 일단 표준 컬럼으로 DF 생성
         if fixed_rows:
             df = pd.DataFrame(fixed_rows, columns=INSPECTION_COLUMNS)
         else:
             df = pd.DataFrame(columns=INSPECTION_COLUMNS)
 
-        # 시트 헤더가 표준과 다르면 자동 정리
         if raw_header != INSPECTION_COLUMNS:
             save_inspection_data(df, sheet)
 
@@ -1185,6 +1252,13 @@ def inspection_page():
 
         request_content = st.text_area("요청내용", key="insp_request_content")
 
+        st.markdown("#### 첨부파일")
+        uploaded_file = st.file_uploader(
+            "실사 관련 파일 업로드",
+            type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
+            key="insp_uploaded_file"
+        )
+
         submit_request = st.form_submit_button("실사 요청 등록")
 
         if submit_request:
@@ -1193,6 +1267,19 @@ def inspection_page():
             elif not sales_manager.strip():
                 st.warning("영업담당자를 입력해주세요.")
             else:
+                attachment_name = ""
+                attachment_link = ""
+
+                if uploaded_file is not None:
+                    try:
+                        attachment_name, attachment_link = upload_file_to_drive(
+                            uploaded_file,
+                            folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
+                        )
+                    except Exception as e:
+                        st.error(str(e))
+                        st.stop()
+
                 new_row = pd.DataFrame([{
                     "요청일": str(req_date),
                     "단지명": complex_name.strip(),
@@ -1202,6 +1289,8 @@ def inspection_page():
                     "영업담당자": sales_manager.strip(),
                     "요청내용": request_content.strip(),
                     "비고": note.strip(),
+                    "첨부파일명": attachment_name,
+                    "첨부파일링크": attachment_link,
                     "실사담당자": "",
                     "실사예정일": "",
                     "실사완료일": "",
@@ -1257,6 +1346,7 @@ def inspection_page():
 
         show_cols = [
             "요청일", "단지명", "상품구분", "수량", "주소", "영업담당자",
+            "첨부파일명", "첨부파일링크",
             "실사담당자", "실사예정일", "진행상태", "계약여부"
         ]
 
@@ -1282,9 +1372,13 @@ def inspection_page():
             assign_idx = int(selected_assign.split("|")[0].strip())
             assign_row = df.loc[df["row_id"] == assign_idx].iloc[0]
 
+            assign_date_raw = str(assign_row["실사예정일"]).strip()
+
+            parsed_assign_date = pd.to_datetime(assign_date_raw, errors="coerce")
+
             default_assign_date = (
-                pd.to_datetime(assign_row["실사예정일"]).date()
-                if str(assign_row["실사예정일"]).strip() not in ["", "nan"]
+                parsed_assign_date.date()
+                if pd.notna(parsed_assign_date)
                 else date.today()
             )
 
@@ -1325,9 +1419,13 @@ def inspection_page():
             result_idx = int(selected_result.split("|")[0].strip())
             result_row = df.loc[df["row_id"] == result_idx].iloc[0]
 
+            complete_date_raw = str(result_row["실사완료일"]).strip()
+
+            parsed_complete_date = pd.to_datetime(complete_date_raw, errors="coerce")
+
             default_complete_date = (
-                pd.to_datetime(result_row["실사완료일"]).date()
-                if str(result_row["실사완료일"]).strip() not in ["", "nan"]
+                parsed_complete_date.date()
+                if pd.notna(parsed_complete_date)
                 else date.today()
             )
 
@@ -1375,9 +1473,13 @@ def inspection_page():
             contract_idx = int(selected_contract.split("|")[0].strip())
             contract_row = df.loc[df["row_id"] == contract_idx].iloc[0]
 
+            contract_date_raw = str(contract_row["계약일"]).strip()
+
+            parsed_contract_date = pd.to_datetime(contract_date_raw, errors="coerce")
+
             default_contract_date = (
-                pd.to_datetime(contract_row["계약일"]).date()
-                if str(contract_row["계약일"]).strip() not in ["", "nan"]
+                parsed_contract_date.date()
+                if pd.notna(parsed_contract_date)
                 else date.today()
             )
 
@@ -1445,9 +1547,13 @@ def inspection_page():
             edit_idx = int(selected_edit.split("|")[0].strip())
             edit_row = df.loc[df["row_id"] == edit_idx].iloc[0]
 
+            req_date_raw = str(edit_row["요청일"]).strip()
+
+            parsed_req_date = pd.to_datetime(req_date_raw, errors="coerce")
+
             default_req_date = (
-                pd.to_datetime(edit_row["요청일"]).date()
-                if str(edit_row["요청일"]).strip() not in ["", "nan"]
+                parsed_req_date.date()
+                if pd.notna(parsed_req_date)
                 else date.today()
             )
 
