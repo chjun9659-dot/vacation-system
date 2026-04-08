@@ -836,7 +836,7 @@ def ensure_schedule_sheet_header(sheet):
         existing = existing[EXPECTED_COLUMNS]
         save_schedule_data(existing, sheet)
 
-
+@st.cache_data(ttl=60)
 def load_schedule_data():
     sheet = get_schedule_sheet()
     ensure_schedule_sheet_header(sheet)
