@@ -1328,95 +1328,94 @@ def inspection_page():
 
     st.divider()
 
-    st.subheader("1. 실사 요청 등록")
+    with st.expander("📝 1. 실사 요청 등록", expanded=False):
+        with st.form("inspection_request_form_new"):
+            c1, c2, c3 = st.columns(3)
+            req_date = c1.date_input("요청일", value=date.today())
+            operator_name = c2.text_input("운영사")
+            site_name = c3.text_input("현장명")
 
-    with st.form("inspection_request_form_new"):
-        c1, c2, c3 = st.columns(3)
-        req_date = c1.date_input("요청일", value=date.today())
-        operator_name = c2.text_input("운영사")
-        site_name = c3.text_input("현장명")
+            c4, c5, c6 = st.columns(3)
+            site_address = c4.text_input("현장주소")
+            site_phone = c5.text_input("현장연락처")
+            product_type = c6.selectbox("상품구분", PRODUCT_OPTIONS)
 
-        c4, c5, c6 = st.columns(3)
-        site_address = c4.text_input("현장주소")
-        site_phone = c5.text_input("현장연락처")
-        product_type = c6.selectbox("상품구분", PRODUCT_OPTIONS)
+            c7, c8, c9 = st.columns(3)
+            parking_count = c7.number_input("주차면수", min_value=0, step=1, value=0)
+            new_qty = c8.number_input("신규설치수량", min_value=0, step=1, value=0)
+            installed_qty = c9.number_input("기설치수량", min_value=0, step=1, value=0)
 
-        c7, c8, c9 = st.columns(3)
-        parking_count = c7.number_input("주차면수", min_value=0, step=1, value=0)
-        new_qty = c8.number_input("신규설치수량", min_value=0, step=1, value=0)
-        installed_qty = c9.number_input("기설치수량", min_value=0, step=1, value=0)
+            c10, c11 = st.columns(2)
+            sales_manager = c10.text_input("영업담당자")
+            sales_phone = c11.text_input("영업담당자 연락처")
 
-        c10, c11 = st.columns(2)
-        sales_manager = c10.text_input("영업담당자")
-        sales_phone = c11.text_input("영업담당자 연락처")
+            request_content = st.text_area("요청내용")
+            note = st.text_input("비고")
 
-        request_content = st.text_area("요청내용")
-        note = st.text_input("비고")
+            st.markdown("#### 첨부파일")
+            uploaded_file = st.file_uploader(
+                "실사 관련 파일 업로드",
+                type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
+                key="insp_uploaded_file_new"
+            )
 
-        st.markdown("#### 첨부파일")
-        uploaded_file = st.file_uploader(
-            "실사 관련 파일 업로드",
-            type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
-            key="insp_uploaded_file_new"
-        )
+            submit_request = st.form_submit_button("실사 요청 등록")
 
-        submit_request = st.form_submit_button("실사 요청 등록")
+            if submit_request:
+                if not site_name.strip():
+                    st.warning("현장명을 입력해주세요.")
+                elif not sales_manager.strip():
+                    st.warning("영업담당자를 입력해주세요.")
+                else:
+                    attachment_name = ""
+                    attachment_link = ""
 
-        if submit_request:
-            if not site_name.strip():
-                st.warning("현장명을 입력해주세요.")
-            elif not sales_manager.strip():
-                st.warning("영업담당자를 입력해주세요.")
-            else:
-                attachment_name = ""
-                attachment_link = ""
+                    if uploaded_file is not None:
+                        try:
+                            attachment_name, attachment_link = upload_file_to_drive(
+                                uploaded_file,
+                                folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
+                            )
+                        except Exception as e:
+                            st.error(str(e))
+                            st.stop()
 
-                if uploaded_file is not None:
-                    try:
-                        attachment_name, attachment_link = upload_file_to_drive(
-                            uploaded_file,
-                            folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
-                        )
-                    except Exception as e:
-                        st.error(str(e))
-                        st.stop()
+                    new_row = pd.DataFrame([{
+                        "요청일": str(req_date),
+                        "운영사": operator_name.strip(),
+                        "현장명": site_name.strip(),
+                        "현장주소": site_address.strip(),
+                        "현장연락처": site_phone.strip(),
+                        "주차면수": int(parking_count),
+                        "상품구분": product_type,
+                        "신규설치수량": int(new_qty),
+                        "기설치수량": int(installed_qty),
+                        "영업담당자": sales_manager.strip(),
+                        "영업담당연락처": sales_phone.strip(),
+                        "요청내용": request_content.strip(),
+                        "비고": note.strip(),
+                        "첨부파일명": attachment_name,
+                        "첨부파일링크": attachment_link,
+                        "실사담당자": "",
+                        "실사예정일": "",
+                        "실사완료일": "",
+                        "진행상태": "요청접수",
+                        "실사결과": "",
+                        "특이사항": "",
+                        "후속조치": "",
+                        "계약여부": "대기",
+                        "계약일": "",
+                        "계약수량": 0,
+                        "계약금액": 0,
+                        "미계약사유": ""
+                    }])
 
-                new_row = pd.DataFrame([{
-                    "요청일": str(req_date),
-                    "운영사": operator_name.strip(),
-                    "현장명": site_name.strip(),
-                    "현장주소": site_address.strip(),
-                    "현장연락처": site_phone.strip(),
-                    "주차면수": int(parking_count),
-                    "상품구분": product_type,
-                    "신규설치수량": int(new_qty),
-                    "기설치수량": int(installed_qty),
-                    "영업담당자": sales_manager.strip(),
-                    "영업담당연락처": sales_phone.strip(),
-                    "요청내용": request_content.strip(),
-                    "비고": note.strip(),
-                    "첨부파일명": attachment_name,
-                    "첨부파일링크": attachment_link,
-                    "실사담당자": "",
-                    "실사예정일": "",
-                    "실사완료일": "",
-                    "진행상태": "요청접수",
-                    "실사결과": "",
-                    "특이사항": "",
-                    "후속조치": "",
-                    "계약여부": "대기",
-                    "계약일": "",
-                    "계약수량": 0,
-                    "계약금액": 0,
-                    "미계약사유": ""
-                }])
+                    save_df = df[INSPECTION_COLUMNS].copy() if not df.empty else pd.DataFrame(columns=INSPECTION_COLUMNS)
+                    save_df = pd.concat([save_df, new_row], ignore_index=True)
+                    save_inspection_data(save_df)
 
-                save_df = df[INSPECTION_COLUMNS].copy() if not df.empty else pd.DataFrame(columns=INSPECTION_COLUMNS)
-                save_df = pd.concat([save_df, new_row], ignore_index=True)
-                save_inspection_data(save_df)
-
-                set_inspection_flash("실사 요청이 등록되었습니다.", "success")
-                st.rerun()
+                    set_inspection_flash("실사 요청이 등록되었습니다.", "success")
+                    st.rerun()
 
     st.divider()
 
