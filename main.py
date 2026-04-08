@@ -792,6 +792,17 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
             fields="id, name, webViewLink"
         ).execute()
 
+        file_id = uploaded.get("id")
+
+        # 첨부파일 열람 권한 부여
+        drive_service.permissions().create(
+            fileId=file_id,
+            body={
+                "type": "anyone",
+                "role": "reader"
+            }
+        ).execute()
+
         return uploaded.get("name", uploaded_file.name), uploaded.get("webViewLink", "")
 
     except Exception as e:
@@ -931,7 +942,6 @@ def schedule_page():
                 st.rerun()
 
     st.divider()
-
     with st.expander("📅 2. 오늘 일정", expanded=False):
         today_df = df[df["날짜"] == today_str].copy()
 
@@ -942,7 +952,6 @@ def schedule_page():
             st.dataframe(show_today, use_container_width=True, hide_index=True)
 
     st.divider()
-
     with st.expander("📋 3. 시공 일정 보기", expanded=False):
         managers = ["전체"] + sorted([m for m in df["시공담당"].dropna().unique().tolist() if str(m).strip() != ""])
 
@@ -996,24 +1005,25 @@ def schedule_page():
             edit_idx = int(selected_edit.split("|")[0].strip())
             edit_row = df.loc[df["row_id"] == edit_idx].iloc[0]
 
-            with st.form("edit_schedule_form_unique"):
+            default_edit_date = (
+                pd.to_datetime(edit_row["날짜"]).date()
+                if str(edit_row["날짜"]).strip()
+                else date.today()
+            )
+
+            with st.form(f"edit_schedule_form_{edit_idx}"):
                 e1, e2, e3 = st.columns(3)
-                edit_date = e1.date_input(
-                    "시공 날짜 수정",
-                    value=pd.to_datetime(edit_row["날짜"]).date() if str(edit_row["날짜"]).strip() else date.today(),
-                    key="sch_edit_date_unique"
-                )
-                edit_site = e2.text_input("설치현장 수정", value=str(edit_row["설치현장"]), key="sch_edit_site_unique")
-                edit_manager = e3.text_input("시공담당 수정", value=str(edit_row["시공담당"]), key="sch_edit_manager_unique")
+                edit_date = e1.date_input("시공 날짜 수정", value=default_edit_date)
+                edit_site = e2.text_input("설치현장 수정", value=str(edit_row["설치현장"]))
+                edit_manager = e3.text_input("시공담당 수정", value=str(edit_row["시공담당"]))
 
                 e4, e5, e6 = st.columns(3)
-                edit_qty = e4.number_input("수량 수정", min_value=0, step=1, value=int(edit_row["수량"]), key="sch_edit_qty_unique")
-                edit_note = e5.text_input("비고 수정", value=str(edit_row["비고"]), key="sch_edit_note_unique")
+                edit_qty = e4.number_input("수량 수정", min_value=0, step=1, value=int(edit_row["수량"]))
+                edit_note = e5.text_input("비고 수정", value=str(edit_row["비고"]))
                 edit_status = e6.selectbox(
                     "상태 수정",
                     ["진행중", "완료"],
-                    index=0 if edit_row["상태"] == "진행중" else 1,
-                    key="sch_edit_status_unique"
+                    index=0 if str(edit_row["상태"]) == "진행중" else 1
                 )
 
                 edit_submit = st.form_submit_button("수정 저장")
@@ -1111,10 +1121,33 @@ def schedule_page():
 # =========================================================
 INSPECTION_SHEET_NAME = "실사관리"
 INSPECTION_COLUMNS = [
-    "요청일", "단지명", "상품구분", "수량", "주소", "영업담당자", "요청내용", "비고",
-    "첨부파일명", "첨부파일링크",
-    "실사담당자", "실사예정일", "실사완료일", "진행상태", "실사결과", "특이사항", "후속조치",
-    "계약여부", "계약일", "계약수량", "계약금액", "미계약사유"
+    "요청일",
+    "운영사",
+    "현장명",
+    "현장주소",
+    "현장연락처",
+    "주차면수",
+    "상품구분",
+    "신규설치수량",
+    "기설치수량",
+    "영업담당자",
+    "영업담당연락처",
+    "요청내용",
+    "비고",
+    "첨부파일명",
+    "첨부파일링크",
+    "실사담당자",
+    "실사예정일",
+    "실사완료일",
+    "진행상태",
+    "실사결과",
+    "특이사항",
+    "후속조치",
+    "계약여부",
+    "계약일",
+    "계약수량",
+    "계약금액",
+    "미계약사유"
 ]
 
 INSPECTION_STATUS_OPTIONS = [
@@ -1136,23 +1169,69 @@ def get_inspection_sheet():
     return client.open(INSPECTION_SHEET_NAME).sheet1
 
 
+def safe_int(value, default=0):
+    num = pd.to_numeric(value, errors="coerce")
+    if pd.isna(num):
+        return default
+    return int(num)
+
+
+def show_inspection_flash():
+    msg = st.session_state.pop("inspection_flash", "")
+    msg_type = st.session_state.pop("inspection_flash_type", "success")
+
+    if msg:
+        if msg_type == "success":
+            st.success(msg)
+        elif msg_type == "warning":
+            st.warning(msg)
+        elif msg_type == "error":
+            st.error(msg)
+        else:
+            st.info(msg)
+
+
+def set_inspection_flash(msg, msg_type="success"):
+    st.session_state["inspection_flash"] = msg
+    st.session_state["inspection_flash_type"] = msg_type
+
+
+def normalize_inspection_df(df):
+    for col in INSPECTION_COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[INSPECTION_COLUMNS].copy()
+
+    int_cols = ["주차면수", "신규설치수량", "기설치수량", "계약수량"]
+    for col in int_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+
+    df["계약금액"] = pd.to_numeric(df["계약금액"], errors="coerce").fillna(0)
+
+    date_cols = ["요청일", "실사예정일", "실사완료일", "계약일"]
+    for col in date_cols:
+        df[col] = df[col].astype(str)
+
+    df["진행상태"] = df["진행상태"].astype(str).replace("", "요청접수")
+    df["계약여부"] = df["계약여부"].astype(str).replace("", "대기")
+
+    return df
+
+
 def load_inspection_data():
     try:
         sheet = get_inspection_sheet()
         values = sheet.get_all_values()
 
         if not values:
-            sheet.update(f"A1:V1", [INSPECTION_COLUMNS])
+            sheet.update(f"A1:AA1", [INSPECTION_COLUMNS])
             return pd.DataFrame(columns=INSPECTION_COLUMNS)
 
-        raw_header = [str(x).strip() for x in values[0]]
+        raw_rows = values
+        header = [str(x).strip() for x in raw_rows[0]]
 
-        if len(raw_header) < len(INSPECTION_COLUMNS):
-            raw_header = raw_header + INSPECTION_COLUMNS[len(raw_header):]
-
-        raw_header = raw_header[:len(INSPECTION_COLUMNS)]
-
-        data_rows = values[1:] if len(values) > 1 else []
+        data_rows = raw_rows[1:] if len(raw_rows) > 1 else []
 
         fixed_rows = []
         for row in data_rows:
@@ -1160,28 +1239,52 @@ def load_inspection_data():
             fixed_rows.append(row[:len(INSPECTION_COLUMNS)])
 
         if fixed_rows:
-            df = pd.DataFrame(fixed_rows, columns=INSPECTION_COLUMNS)
+            if header == INSPECTION_COLUMNS:
+                df = pd.DataFrame(fixed_rows, columns=INSPECTION_COLUMNS)
+            else:
+                # 기존 구조를 최대한 살려서 새 컬럼으로 이관
+                temp_df = pd.DataFrame(data_rows, columns=header[:len(data_rows[0])] if data_rows and header else header)
+                df = pd.DataFrame(columns=INSPECTION_COLUMNS)
+
+                old_to_new_map = {
+                    "요청일": "요청일",
+                    "단지명": "현장명",
+                    "상품구분": "상품구분",
+                    "수량": "신규설치수량",
+                    "주소": "현장주소",
+                    "영업담당자": "영업담당자",
+                    "요청내용": "요청내용",
+                    "비고": "비고",
+                    "첨부파일명": "첨부파일명",
+                    "첨부파일링크": "첨부파일링크",
+                    "실사담당자": "실사담당자",
+                    "실사예정일": "실사예정일",
+                    "실사완료일": "실사완료일",
+                    "진행상태": "진행상태",
+                    "실사결과": "실사결과",
+                    "특이사항": "특이사항",
+                    "후속조치": "후속조치",
+                    "계약여부": "계약여부",
+                    "계약일": "계약일",
+                    "계약수량": "계약수량",
+                    "계약금액": "계약금액",
+                    "미계약사유": "미계약사유",
+                }
+
+                for old_col, new_col in old_to_new_map.items():
+                    if old_col in temp_df.columns:
+                        df[new_col] = temp_df[old_col]
+
+                for col in INSPECTION_COLUMNS:
+                    if col not in df.columns:
+                        df[col] = ""
         else:
             df = pd.DataFrame(columns=INSPECTION_COLUMNS)
 
-        if raw_header != INSPECTION_COLUMNS:
+        df = normalize_inspection_df(df)
+
+        if header != INSPECTION_COLUMNS:
             save_inspection_data(df, sheet)
-
-        for col in INSPECTION_COLUMNS:
-            if col not in df.columns:
-                df[col] = ""
-
-        df = df[INSPECTION_COLUMNS].copy()
-
-        df["수량"] = pd.to_numeric(df["수량"], errors="coerce").fillna(0).astype(int)
-        df["계약수량"] = pd.to_numeric(df["계약수량"], errors="coerce").fillna(0).astype(int)
-        df["계약금액"] = pd.to_numeric(df["계약금액"], errors="coerce").fillna(0)
-
-        for col in ["요청일", "실사예정일", "실사완료일", "계약일"]:
-            df[col] = df[col].astype(str)
-
-        df["진행상태"] = df["진행상태"].astype(str).replace("", "요청접수")
-        df["계약여부"] = df["계약여부"].astype(str).replace("", "대기")
 
         return df
 
@@ -1194,17 +1297,7 @@ def save_inspection_data(df, sheet=None):
     if sheet is None:
         sheet = get_inspection_sheet()
 
-    save_df = df.copy()
-
-    for col in INSPECTION_COLUMNS:
-        if col not in save_df.columns:
-            save_df[col] = ""
-
-    save_df = save_df[INSPECTION_COLUMNS].fillna("")
-    save_df["수량"] = pd.to_numeric(save_df["수량"], errors="coerce").fillna(0).astype(int)
-    save_df["계약수량"] = pd.to_numeric(save_df["계약수량"], errors="coerce").fillna(0).astype(int)
-    save_df["계약금액"] = pd.to_numeric(save_df["계약금액"], errors="coerce").fillna(0)
-
+    save_df = normalize_inspection_df(df)
     rows = [save_df.columns.tolist()] + save_df.astype(str).values.tolist()
     sheet.clear()
     sheet.update(rows)
@@ -1214,8 +1307,9 @@ def inspection_page():
     st.title("🔎 실사 관리 프로그램")
     st.write("실사 요청 등록 → 담당자 배정 → 일정 입력 → 결과 작성 → 계약 여부 관리")
 
-    df = load_inspection_data()
+    show_inspection_flash()
 
+    df = load_inspection_data()
     df = df.reset_index(drop=True)
     df["row_id"] = df.index
 
@@ -1236,34 +1330,41 @@ def inspection_page():
 
     st.subheader("1. 실사 요청 등록")
 
-    with st.form("inspection_request_form"):
+    with st.form("inspection_request_form_new"):
         c1, c2, c3 = st.columns(3)
-        req_date = c1.date_input("요청일", value=date.today(), key="insp_req_date")
-        complex_name = c2.text_input("단지명", key="insp_complex_name")
-        product_type = c3.selectbox("상품구분", PRODUCT_OPTIONS, key="insp_product_type")
+        req_date = c1.date_input("요청일", value=date.today())
+        operator_name = c2.text_input("운영사")
+        site_name = c3.text_input("현장명")
 
-        c4, c5 = st.columns(2)
-        quantity = c4.number_input("수량", min_value=0, step=1, value=0, key="insp_quantity")
-        address = c5.text_input("주소", key="insp_address")
+        c4, c5, c6 = st.columns(3)
+        site_address = c4.text_input("현장주소")
+        site_phone = c5.text_input("현장연락처")
+        product_type = c6.selectbox("상품구분", PRODUCT_OPTIONS)
 
-        c6, c7 = st.columns(2)
-        sales_manager = c6.text_input("영업담당자", key="insp_sales_manager")
-        note = c7.text_input("비고", key="insp_note")
+        c7, c8, c9 = st.columns(3)
+        parking_count = c7.number_input("주차면수", min_value=0, step=1, value=0)
+        new_qty = c8.number_input("신규설치수량", min_value=0, step=1, value=0)
+        installed_qty = c9.number_input("기설치수량", min_value=0, step=1, value=0)
 
-        request_content = st.text_area("요청내용", key="insp_request_content")
+        c10, c11 = st.columns(2)
+        sales_manager = c10.text_input("영업담당자")
+        sales_phone = c11.text_input("영업담당자 연락처")
+
+        request_content = st.text_area("요청내용")
+        note = st.text_input("비고")
 
         st.markdown("#### 첨부파일")
         uploaded_file = st.file_uploader(
             "실사 관련 파일 업로드",
             type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
-            key="insp_uploaded_file"
+            key="insp_uploaded_file_new"
         )
 
         submit_request = st.form_submit_button("실사 요청 등록")
 
         if submit_request:
-            if not complex_name.strip():
-                st.warning("단지명을 입력해주세요.")
+            if not site_name.strip():
+                st.warning("현장명을 입력해주세요.")
             elif not sales_manager.strip():
                 st.warning("영업담당자를 입력해주세요.")
             else:
@@ -1282,11 +1383,16 @@ def inspection_page():
 
                 new_row = pd.DataFrame([{
                     "요청일": str(req_date),
-                    "단지명": complex_name.strip(),
+                    "운영사": operator_name.strip(),
+                    "현장명": site_name.strip(),
+                    "현장주소": site_address.strip(),
+                    "현장연락처": site_phone.strip(),
+                    "주차면수": int(parking_count),
                     "상품구분": product_type,
-                    "수량": int(quantity),
-                    "주소": address.strip(),
+                    "신규설치수량": int(new_qty),
+                    "기설치수량": int(installed_qty),
                     "영업담당자": sales_manager.strip(),
+                    "영업담당연락처": sales_phone.strip(),
                     "요청내용": request_content.strip(),
                     "비고": note.strip(),
                     "첨부파일명": attachment_name,
@@ -1308,7 +1414,8 @@ def inspection_page():
                 save_df = df[INSPECTION_COLUMNS].copy() if not df.empty else pd.DataFrame(columns=INSPECTION_COLUMNS)
                 save_df = pd.concat([save_df, new_row], ignore_index=True)
                 save_inspection_data(save_df)
-                st.success("실사 요청이 등록되었습니다.")
+
+                set_inspection_flash("실사 요청이 등록되었습니다.", "success")
                 st.rerun()
 
     st.divider()
@@ -1319,10 +1426,10 @@ def inspection_page():
         contract_list = ["전체"] + CONTRACT_OPTIONS
 
         f1, f2, f3, f4 = st.columns(4)
-        status_filter = f1.selectbox("진행상태", status_list, key="insp_filter_status")
-        product_filter = f2.selectbox("상품구분", product_list, key="insp_filter_product")
-        contract_filter = f3.selectbox("계약여부", contract_list, key="insp_filter_contract")
-        keyword = f4.text_input("검색", placeholder="단지명 / 주소 / 담당자", key="insp_filter_keyword")
+        status_filter = f1.selectbox("진행상태", status_list, key="insp_filter_status_new")
+        product_filter = f2.selectbox("상품구분", product_list, key="insp_filter_product_new")
+        contract_filter = f3.selectbox("계약여부", contract_list, key="insp_filter_contract_new")
+        keyword = f4.text_input("검색", placeholder="현장명 / 주소 / 담당자 / 운영사", key="insp_filter_keyword_new")
 
         filtered_df = df.copy()
 
@@ -1338,24 +1445,41 @@ def inspection_page():
         if keyword.strip():
             kw = keyword.strip()
             filtered_df = filtered_df[
-                filtered_df["단지명"].astype(str).str.contains(kw, case=False, na=False) |
-                filtered_df["주소"].astype(str).str.contains(kw, case=False, na=False) |
+                filtered_df["현장명"].astype(str).str.contains(kw, case=False, na=False) |
+                filtered_df["현장주소"].astype(str).str.contains(kw, case=False, na=False) |
                 filtered_df["영업담당자"].astype(str).str.contains(kw, case=False, na=False) |
-                filtered_df["실사담당자"].astype(str).str.contains(kw, case=False, na=False)
-            ]
+                filtered_df["실사담당자"].astype(str).str.contains(kw, case=False, na=False) |
+                filtered_df["운영사"].astype(str).str.contains(kw, case=False, na=False)
+            ].copy()
 
-        show_cols = [
-            "요청일", "단지명", "상품구분", "수량", "주소", "영업담당자",
+        show_df = filtered_df[[
+            "요청일", "운영사", "현장명", "현장주소", "현장연락처",
+            "주차면수", "상품구분", "신규설치수량", "기설치수량",
+            "영업담당자", "영업담당연락처",
             "첨부파일명", "첨부파일링크",
             "실사담당자", "실사예정일", "진행상태", "계약여부"
-        ]
-
-        show_df = filtered_df[show_cols].copy()
+        ]].copy()
 
         if show_df.empty:
             st.info("조건에 맞는 실사 내역이 없습니다.")
         else:
-            st.dataframe(show_df, use_container_width=True, hide_index=True)
+            show_df["첨부파일열기"] = show_df["첨부파일링크"]
+            show_df["첨부파일명"] = show_df["첨부파일명"].replace("", "-")
+
+            st.data_editor(
+                show_df,
+                use_container_width=True,
+                hide_index=True,
+                disabled=True,
+                column_config={
+                    "첨부파일링크": None,
+                    "첨부파일열기": st.column_config.LinkColumn(
+                        "첨부파일 열기",
+                        display_text="열기"
+                    )
+                }
+            )
+            st.caption("이제 첨부파일 링크를 복붙하지 않고 '열기'로 바로 확인할 수 있습니다.")
 
     st.divider()
 
@@ -1364,33 +1488,26 @@ def inspection_page():
             st.info("배정할 실사 요청이 없습니다.")
         else:
             assign_options = [
-                f"{row['row_id']} | {row['요청일']} | {row['단지명']} | {row['상품구분']} | {row['영업담당자']}"
+                f"{row['row_id']} | {row['요청일']} | {row['현장명']} | {row['상품구분']} | {row['영업담당자']}"
                 for _, row in df.iterrows()
             ]
 
-            selected_assign = st.selectbox("배정할 실사 선택", assign_options, key="insp_assign_select")
+            selected_assign = st.selectbox("배정할 실사 선택", assign_options, key="insp_assign_select_new")
             assign_idx = int(selected_assign.split("|")[0].strip())
             assign_row = df.loc[df["row_id"] == assign_idx].iloc[0]
 
             assign_date_raw = str(assign_row["실사예정일"]).strip()
-
             parsed_assign_date = pd.to_datetime(assign_date_raw, errors="coerce")
+            default_assign_date = parsed_assign_date.date() if pd.notna(parsed_assign_date) else date.today()
 
-            default_assign_date = (
-                parsed_assign_date.date()
-                if pd.notna(parsed_assign_date)
-                else date.today()
-            )
-
-            with st.form("inspection_assign_form"):
+            with st.form(f"inspection_assign_form_{assign_idx}"):
                 a1, a2, a3 = st.columns(3)
-                inspector = a1.text_input("실사담당자", value=str(assign_row["실사담당자"]), key="insp_assign_inspector")
-                inspect_date = a2.date_input("실사예정일", value=default_assign_date, key="insp_assign_date")
+                inspector = a1.text_input("실사담당자", value=str(assign_row["실사담당자"]))
+                inspect_date = a2.date_input("실사예정일", value=default_assign_date)
                 inspect_status = a3.selectbox(
                     "진행상태",
                     INSPECTION_STATUS_OPTIONS,
-                    index=INSPECTION_STATUS_OPTIONS.index(assign_row["진행상태"]) if assign_row["진행상태"] in INSPECTION_STATUS_OPTIONS else 0,
-                    key="insp_assign_status"
+                    index=INSPECTION_STATUS_OPTIONS.index(assign_row["진행상태"]) if assign_row["진행상태"] in INSPECTION_STATUS_OPTIONS else 0
                 )
 
                 assign_submit = st.form_submit_button("배정 / 일정 저장")
@@ -1401,7 +1518,8 @@ def inspection_page():
                     save_df.loc[assign_idx, "실사예정일"] = str(inspect_date)
                     save_df.loc[assign_idx, "진행상태"] = inspect_status
                     save_inspection_data(save_df)
-                    st.success("담당자 배정 및 일정 저장 완료!")
+
+                    set_inspection_flash("담당자 배정 및 일정 저장 완료!", "success")
                     st.rerun()
 
     st.divider()
@@ -1411,38 +1529,31 @@ def inspection_page():
             st.info("입력할 실사 내역이 없습니다.")
         else:
             result_options = [
-                f"{row['row_id']} | {row['단지명']} | {row['실사담당자']} | {row['진행상태']}"
+                f"{row['row_id']} | {row['현장명']} | {row['실사담당자']} | {row['진행상태']}"
                 for _, row in df.iterrows()
             ]
 
-            selected_result = st.selectbox("결과 입력 대상 선택", result_options, key="insp_result_select")
+            selected_result = st.selectbox("결과 입력 대상 선택", result_options, key="insp_result_select_new")
             result_idx = int(selected_result.split("|")[0].strip())
             result_row = df.loc[df["row_id"] == result_idx].iloc[0]
 
             complete_date_raw = str(result_row["실사완료일"]).strip()
-
             parsed_complete_date = pd.to_datetime(complete_date_raw, errors="coerce")
+            default_complete_date = parsed_complete_date.date() if pd.notna(parsed_complete_date) else date.today()
 
-            default_complete_date = (
-                parsed_complete_date.date()
-                if pd.notna(parsed_complete_date)
-                else date.today()
-            )
-
-            with st.form("inspection_result_form"):
+            with st.form(f"inspection_result_form_{result_idx}"):
                 r1, r2 = st.columns(2)
-                result_text = r1.text_area("실사결과", value=str(result_row["실사결과"]), key="insp_result_text")
-                special_note = r2.text_area("특이사항", value=str(result_row["특이사항"]), key="insp_special_note")
+                result_text = r1.text_area("실사결과", value=str(result_row["실사결과"]))
+                special_note = r2.text_area("특이사항", value=str(result_row["특이사항"]))
 
                 r3, r4 = st.columns(2)
-                follow_up = r3.text_area("후속조치", value=str(result_row["후속조치"]), key="insp_follow_up")
-                complete_date = r4.date_input("실사완료일", value=default_complete_date, key="insp_complete_date")
+                follow_up = r3.text_area("후속조치", value=str(result_row["후속조치"]))
+                complete_date = r4.date_input("실사완료일", value=default_complete_date)
 
                 result_status = st.selectbox(
                     "진행상태",
                     INSPECTION_STATUS_OPTIONS,
-                    index=INSPECTION_STATUS_OPTIONS.index(result_row["진행상태"]) if result_row["진행상태"] in INSPECTION_STATUS_OPTIONS else 0,
-                    key="insp_result_status"
+                    index=INSPECTION_STATUS_OPTIONS.index(result_row["진행상태"]) if result_row["진행상태"] in INSPECTION_STATUS_OPTIONS else 0
                 )
 
                 result_submit = st.form_submit_button("실사 결과 저장")
@@ -1455,7 +1566,8 @@ def inspection_page():
                     save_df.loc[result_idx, "실사완료일"] = str(complete_date)
                     save_df.loc[result_idx, "진행상태"] = result_status
                     save_inspection_data(save_df)
-                    st.success("실사 결과 저장 완료!")
+
+                    set_inspection_flash("실사 결과 저장 완료!", "success")
                     st.rerun()
 
     st.divider()
@@ -1465,53 +1577,34 @@ def inspection_page():
             st.info("계약 처리할 내역이 없습니다.")
         else:
             contract_options = [
-                f"{row['row_id']} | {row['단지명']} | {row['상품구분']} | 현재:{row['계약여부']}"
+                f"{row['row_id']} | {row['현장명']} | {row['상품구분']} | 현재:{row['계약여부']}"
                 for _, row in df.iterrows()
             ]
 
-            selected_contract = st.selectbox("계약 처리 대상 선택", contract_options, key="insp_contract_select")
+            selected_contract = st.selectbox("계약 처리 대상 선택", contract_options, key="insp_contract_select_new")
             contract_idx = int(selected_contract.split("|")[0].strip())
             contract_row = df.loc[df["row_id"] == contract_idx].iloc[0]
 
             contract_date_raw = str(contract_row["계약일"]).strip()
-
             parsed_contract_date = pd.to_datetime(contract_date_raw, errors="coerce")
+            default_contract_date = parsed_contract_date.date() if pd.notna(parsed_contract_date) else date.today()
 
-            default_contract_date = (
-                parsed_contract_date.date()
-                if pd.notna(parsed_contract_date)
-                else date.today()
-            )
+            contract_qty_default = safe_int(contract_row["계약수량"], 0)
+            contract_amount_default = safe_int(contract_row["계약금액"], 0)
 
-            contract_qty_default = int(pd.to_numeric(contract_row["계약수량"], errors="coerce")) if str(contract_row["계약수량"]).strip() not in ["", "nan"] else 0
-            contract_amount_default = int(pd.to_numeric(contract_row["계약금액"], errors="coerce")) if str(contract_row["계약금액"]).strip() not in ["", "nan"] else 0
-
-            with st.form("inspection_contract_form"):
+            with st.form(f"inspection_contract_form_{contract_idx}"):
                 ct1, ct2, ct3 = st.columns(3)
                 contract_status = ct1.selectbox(
                     "계약여부",
                     CONTRACT_OPTIONS,
-                    index=CONTRACT_OPTIONS.index(contract_row["계약여부"]) if contract_row["계약여부"] in CONTRACT_OPTIONS else 0,
-                    key="insp_contract_status"
+                    index=CONTRACT_OPTIONS.index(contract_row["계약여부"]) if contract_row["계약여부"] in CONTRACT_OPTIONS else 0
                 )
-                contract_date = ct2.date_input("계약일", value=default_contract_date, key="insp_contract_date")
-                contract_qty = ct3.number_input(
-                    "계약수량",
-                    min_value=0,
-                    step=1,
-                    value=contract_qty_default,
-                    key="insp_contract_qty"
-                )
+                contract_date = ct2.date_input("계약일", value=default_contract_date)
+                contract_qty = ct3.number_input("계약수량", min_value=0, step=1, value=contract_qty_default)
 
                 ct4, ct5 = st.columns(2)
-                contract_amount = ct4.number_input(
-                    "계약금액",
-                    min_value=0,
-                    step=10000,
-                    value=contract_amount_default,
-                    key="insp_contract_amount"
-                )
-                fail_reason = ct5.text_input("미계약사유", value=str(contract_row["미계약사유"]), key="insp_fail_reason")
+                contract_amount = ct4.number_input("계약금액", min_value=0, step=10000, value=contract_amount_default)
+                fail_reason = ct5.text_input("미계약사유", value=str(contract_row["미계약사유"]))
 
                 contract_submit = st.form_submit_button("계약 정보 저장")
 
@@ -1529,7 +1622,8 @@ def inspection_page():
                         save_df.loc[contract_idx, "진행상태"] = "미계약종결"
 
                     save_inspection_data(save_df)
-                    st.success("계약 정보 저장 완료!")
+
+                    set_inspection_flash("계약 정보 저장 완료!", "success")
                     st.rerun()
 
     st.divider()
@@ -1539,57 +1633,65 @@ def inspection_page():
             st.info("수정할 내역이 없습니다.")
         else:
             edit_options = [
-                f"{row['row_id']} | {row['단지명']} | {row['상품구분']} | {row['진행상태']}"
+                f"{row['row_id']} | {row['현장명']} | {row['상품구분']} | {row['진행상태']}"
                 for _, row in df.iterrows()
             ]
 
-            selected_edit = st.selectbox("수정 대상 선택", edit_options, key="insp_edit_select")
+            selected_edit = st.selectbox("수정 대상 선택", edit_options, key="insp_edit_select_new")
             edit_idx = int(selected_edit.split("|")[0].strip())
             edit_row = df.loc[df["row_id"] == edit_idx].iloc[0]
 
             req_date_raw = str(edit_row["요청일"]).strip()
-
             parsed_req_date = pd.to_datetime(req_date_raw, errors="coerce")
+            default_req_date = parsed_req_date.date() if pd.notna(parsed_req_date) else date.today()
 
-            default_req_date = (
-                parsed_req_date.date()
-                if pd.notna(parsed_req_date)
-                else date.today()
-            )
-
-            with st.form("inspection_edit_form"):
+            with st.form(f"inspection_edit_form_{edit_idx}"):
                 e1, e2, e3 = st.columns(3)
-                edit_req_date = e1.date_input("요청일 수정", value=default_req_date, key="insp_edit_req_date")
-                edit_name = e2.text_input("단지명 수정", value=str(edit_row["단지명"]), key="insp_edit_name")
-                edit_product = e3.selectbox(
-                    "상품구분 수정",
-                    PRODUCT_OPTIONS,
-                    index=PRODUCT_OPTIONS.index(edit_row["상품구분"]) if edit_row["상품구분"] in PRODUCT_OPTIONS else 0,
-                    key="insp_edit_product"
-                )
+                edit_req_date = e1.date_input("요청일 수정", value=default_req_date)
+                edit_operator = e2.text_input("운영사 수정", value=str(edit_row["운영사"]))
+                edit_name = e3.text_input("현장명 수정", value=str(edit_row["현장명"]))
 
                 e4, e5, e6 = st.columns(3)
-                edit_qty = e4.number_input("수량 수정", min_value=0, step=1, value=int(edit_row["수량"]), key="insp_edit_qty")
-                edit_addr = e5.text_input("주소 수정", value=str(edit_row["주소"]), key="insp_edit_addr")
-                edit_sales = e6.text_input("영업담당자 수정", value=str(edit_row["영업담당자"]), key="insp_edit_sales")
+                edit_addr = e4.text_input("현장주소 수정", value=str(edit_row["현장주소"]))
+                edit_phone = e5.text_input("현장연락처 수정", value=str(edit_row["현장연락처"]))
+                edit_product = e6.selectbox(
+                    "상품구분 수정",
+                    PRODUCT_OPTIONS,
+                    index=PRODUCT_OPTIONS.index(edit_row["상품구분"]) if edit_row["상품구분"] in PRODUCT_OPTIONS else 0
+                )
 
-                edit_request = st.text_area("요청내용 수정", value=str(edit_row["요청내용"]), key="insp_edit_request")
-                edit_note = st.text_input("비고 수정", value=str(edit_row["비고"]), key="insp_edit_note")
+                e7, e8, e9 = st.columns(3)
+                edit_parking = e7.number_input("주차면수 수정", min_value=0, step=1, value=safe_int(edit_row["주차면수"], 0))
+                edit_new_qty = e8.number_input("신규설치수량 수정", min_value=0, step=1, value=safe_int(edit_row["신규설치수량"], 0))
+                edit_old_qty = e9.number_input("기설치수량 수정", min_value=0, step=1, value=safe_int(edit_row["기설치수량"], 0))
+
+                e10, e11 = st.columns(2)
+                edit_sales = e10.text_input("영업담당자 수정", value=str(edit_row["영업담당자"]))
+                edit_sales_phone = e11.text_input("영업담당자 연락처 수정", value=str(edit_row["영업담당연락처"]))
+
+                edit_request = st.text_area("요청내용 수정", value=str(edit_row["요청내용"]))
+                edit_note = st.text_input("비고 수정", value=str(edit_row["비고"]))
 
                 edit_submit = st.form_submit_button("기본 정보 수정 저장")
 
                 if edit_submit:
                     save_df = df[INSPECTION_COLUMNS].copy()
                     save_df.loc[edit_idx, "요청일"] = str(edit_req_date)
-                    save_df.loc[edit_idx, "단지명"] = edit_name.strip()
+                    save_df.loc[edit_idx, "운영사"] = edit_operator.strip()
+                    save_df.loc[edit_idx, "현장명"] = edit_name.strip()
+                    save_df.loc[edit_idx, "현장주소"] = edit_addr.strip()
+                    save_df.loc[edit_idx, "현장연락처"] = edit_phone.strip()
                     save_df.loc[edit_idx, "상품구분"] = edit_product
-                    save_df.loc[edit_idx, "수량"] = int(edit_qty)
-                    save_df.loc[edit_idx, "주소"] = edit_addr.strip()
+                    save_df.loc[edit_idx, "주차면수"] = int(edit_parking)
+                    save_df.loc[edit_idx, "신규설치수량"] = int(edit_new_qty)
+                    save_df.loc[edit_idx, "기설치수량"] = int(edit_old_qty)
                     save_df.loc[edit_idx, "영업담당자"] = edit_sales.strip()
+                    save_df.loc[edit_idx, "영업담당연락처"] = edit_sales_phone.strip()
                     save_df.loc[edit_idx, "요청내용"] = edit_request.strip()
                     save_df.loc[edit_idx, "비고"] = edit_note.strip()
                     save_inspection_data(save_df)
-                    st.success("기본 정보 수정 완료!")
+
+                    set_inspection_flash("기본 정보 수정 완료!", "success")
                     st.rerun()
 
     st.divider()
@@ -1599,14 +1701,14 @@ def inspection_page():
             st.info("삭제할 내역이 없습니다.")
         else:
             delete_options = [
-                f"{row['row_id']} | {row['단지명']} | {row['상품구분']} | {row['영업담당자']}"
+                f"{row['row_id']} | {row['현장명']} | {row['상품구분']} | {row['영업담당자']}"
                 for _, row in df.iterrows()
             ]
 
-            selected_delete = st.selectbox("삭제할 내역 선택", delete_options, key="insp_delete_select")
-            confirm_delete = st.checkbox("정말 삭제합니다. 되돌리기 어렵습니다.", key="insp_delete_confirm")
+            selected_delete = st.selectbox("삭제할 내역 선택", delete_options, key="insp_delete_select_new")
+            confirm_delete = st.checkbox("정말 삭제합니다. 되돌리기 어렵습니다.", key="insp_delete_confirm_new")
 
-            if st.button("선택 내역 삭제", key="insp_delete_btn"):
+            if st.button("선택 내역 삭제", key="insp_delete_btn_new"):
                 if not confirm_delete:
                     st.warning("삭제 확인 체크를 먼저 해주세요.")
                 else:
@@ -1614,7 +1716,8 @@ def inspection_page():
                     save_df = df[INSPECTION_COLUMNS].copy()
                     save_df = save_df.drop(index=delete_idx).reset_index(drop=True)
                     save_inspection_data(save_df)
-                    st.success("삭제 완료!")
+
+                    set_inspection_flash("삭제가 완료되었습니다.", "success")
                     st.rerun()
 
 
