@@ -1378,7 +1378,8 @@ def inspection_page():
                             )
                         except Exception as e:
                             st.error(str(e))
-                            st.stop()
+                            attachment_name = ""
+                            attachment_link = ""
 
                     new_row = pd.DataFrame([{
                         "요청일": str(req_date),
