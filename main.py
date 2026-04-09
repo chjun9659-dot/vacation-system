@@ -86,11 +86,11 @@ def login_screen():
 def draw_sidebar():
     menu_list = ["홈", "연차 관리", "시공 일정", "실사 관리"]
 
-    if "sidebar_menu" not in st.session_state:
-        st.session_state.sidebar_menu = "홈"
-
     if "menu" not in st.session_state:
         st.session_state.menu = "홈"
+
+    if "sidebar_menu" not in st.session_state:
+        st.session_state.sidebar_menu = st.session_state.menu
 
     if st.session_state.menu not in menu_list:
         st.session_state.menu = "홈"
@@ -105,6 +105,7 @@ def draw_sidebar():
         selected_menu = st.radio(
             "메뉴 선택",
             menu_list,
+            index=menu_list.index(st.session_state.menu),
             key="sidebar_menu"
         )
 
@@ -167,22 +168,20 @@ def home_page():
     with c1:
         if st.button("📊 연차 관리", use_container_width=True, key="home_btn_vacation"):
             st.session_state.menu = "연차 관리"
-            st.session_state.sidebar_menu = "연차 관리"
             st.rerun()
             return
 
     with c2:
         if st.button("📅 시공 일정", use_container_width=True, key="home_btn_schedule"):
             st.session_state.menu = "시공 일정"
-            st.session_state.sidebar_menu = "시공 일정"
             st.rerun()
             return
 
     with c3:
         if st.button("🔎 실사 관리", use_container_width=True, key="home_btn_inspection"):
             st.session_state.menu = "실사 관리"
-            st.session_state.sidebar_menu = "실사 관리"
             st.rerun()
+            returnrun()
             return
 
     st.divider()
