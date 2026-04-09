@@ -1077,39 +1077,39 @@ def schedule_page():
 
     with st.expander("📅 1. 시공 일정 등록", expanded=False):
         with st.form("add_schedule_form_unique"):
-            
-        a1, a2, a3 = st.columns(3)
-        work_date = a1.date_input("시공 날짜", value=date.today(), key="sch_work_date_unique")
-        site_name = a2.text_input("설치현장", key="sch_site_name_unique")
-        manager_name = a3.text_input("시공담당", key="sch_manager_name_unique")
 
-        a4, a5 = st.columns(2)
-        quantity = a4.number_input("수량", min_value=0, step=1, value=0, key="sch_quantity_unique")
-        note = a5.text_input("비고", key="sch_note_unique")
+            a1, a2, a3 = st.columns(3)
+            work_date = a1.date_input("시공 날짜", value=date.today(), key="sch_work_date_unique")
+            site_name = a2.text_input("설치현장", key="sch_site_name_unique")
+            manager_name = a3.text_input("시공담당", key="sch_manager_name_unique")
 
-        submitted = st.form_submit_button("등록하기")
+            a4, a5 = st.columns(2)
+            quantity = a4.number_input("수량", min_value=0, step=1, value=0, key="sch_quantity_unique")
+            note = a5.text_input("비고", key="sch_note_unique")
 
-        if submitted:
-            if not site_name.strip():
-                st.warning("설치현장을 입력해주세요.")
-            elif not manager_name.strip():
-                st.warning("시공담당을 입력해주세요.")
-            else:
-                new_row = pd.DataFrame([{
-                    "날짜": str(work_date),
-                    "설치현장": site_name.strip(),
-                    "시공담당": manager_name.strip(),
-                    "수량": int(quantity),
-                    "비고": note.strip(),
-                    "상태": "진행중",
-                    "완료일": ""
-                }])
+            submitted = st.form_submit_button("등록하기")
 
-                save_df = df[EXPECTED_COLUMNS].copy() if not df.empty else pd.DataFrame(columns=EXPECTED_COLUMNS)
-                save_df = pd.concat([save_df, new_row], ignore_index=True)
-                save_schedule_data(save_df)
-                st.success("등록 완료!")
-                st.rerun()
+            if submitted:
+                if not site_name.strip():
+                    st.warning("설치현장을 입력해주세요.")
+                elif not manager_name.strip():
+                    st.warning("시공담당을 입력해주세요.")
+                else:
+                    new_row = pd.DataFrame([{
+                        "날짜": str(work_date),
+                        "설치현장": site_name.strip(),
+                        "시공담당": manager_name.strip(),
+                        "수량": int(quantity),
+                        "비고": note.strip(),
+                        "상태": "진행중",
+                        "완료일": ""
+                    }])
+
+                    save_df = df[EXPECTED_COLUMNS].copy() if not df.empty else pd.DataFrame(columns=EXPECTED_COLUMNS)
+                    save_df = pd.concat([save_df, new_row], ignore_index=True)
+                    save_schedule_data(save_df)
+                    st.success("등록 완료!")
+                    st.rerun()
 
     st.divider()
     with st.expander("📅 2. 오늘 일정", expanded=False):
