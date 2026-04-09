@@ -1473,14 +1473,14 @@ def render_inspection_common_style():
     st.markdown("""
     <style>
     .erp-page-title {
-    font-size: 28px !important;
+    font-size: 25px !important;
     font-weight: 700 !important;
     color: #0f172a !important;
     margin-bottom: 4px !important;
 }
 
 .erp-page-desc {
-    font-size: 14px !important;
+    font-size: 13px !important;
     color: #64748b !important;
     margin-bottom: 20px !important;
 }
