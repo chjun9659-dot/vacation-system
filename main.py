@@ -326,9 +326,17 @@ def parse_use_entry(value):
         return None, None
 
     amount = 0.5 if "반차" in text else 1.0
+
+    # ✅ 형식 강제 정리
     clean = text.replace("(반차)", "").strip()
+    clean = clean.replace(".", "-").replace(" ", "")
+
+    # 26-04-08 → 2026-04-08 보정
+    if len(clean) == 8 and clean[2] == "-":
+        clean = "20" + clean
 
     parsed_date = pd.to_datetime(clean, errors="coerce")
+
     if pd.isna(parsed_date):
         return None, None
 
