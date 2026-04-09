@@ -1077,8 +1077,7 @@ def schedule_page():
 
     with st.expander("📅 1. 시공 일정 등록", expanded=False):
         with st.form("add_schedule_form_unique"):
-
-    with st.form("add_schedule_form_unique"):
+            
         a1, a2, a3 = st.columns(3)
         work_date = a1.date_input("시공 날짜", value=date.today(), key="sch_work_date_unique")
         site_name = a2.text_input("설치현장", key="sch_site_name_unique")
