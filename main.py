@@ -273,11 +273,16 @@ def calculate_auto_leave_days(hire_date, target_year=None):
     return start_date, end_date, service_years, leave_days
 
 
-def find_first_empty_use_col(row):
+def find_first_empty_use_col(row, df_columns):
     for col in USE_COLS:
-        value = row.get(col, None)
-        if pd.isna(value) or clean_text(value) == "" or clean_text(value).lower() == "none":
-            return col
+        matching_indexes = [i for i, c in enumerate(df_columns) if str(c).strip() == col]
+
+        for col_idx in matching_indexes:
+            value = row.iloc[col_idx]
+
+            if pd.isna(value) or clean_text(value) == "" or clean_text(value).lower() == "none":
+                return col_idx
+
     return None
 
 
@@ -549,17 +554,24 @@ def vacation_page():
             if current_remain < leave_amount:
                 st.error("잔여 연차가 부족합니다.")
             else:
-                empty_col = find_first_empty_use_col(df.loc[idx])
-                if empty_col not in df.columns:
-                    st.error(f"{empty_col} 컬럼을 찾지 못했습니다.")
-                    return
+                row_pos = df.index.get_loc(idx)
+                empty_col_idx = find_first_empty_use_col(df.iloc[row_pos], df.columns)
 
-                if empty_col is None:
+                if empty_col_idx is None:
                     st.error("사용일 칸이 모두 찼습니다. 사용일1~사용일30을 확인해주세요.")
                 else:
-                    df.loc[idx, empty_col] = format_leave_date(use_date, leave_type)
-                    df.loc[idx, "사용 연차"] = current_used + leave_amount
-                    df.loc[idx, "잔여 연차"] = current_total - (current_used + leave_amount)
+                    df.iat[row_pos, empty_col_idx] = format_leave_date(use_date, leave_type)
+
+                if empty_col_idx is None:
+                    st.error("사용일 칸이 모두 찼습니다. 사용일1~사용일30을 확인해주세요.")
+                else:
+                    df.iat[row_pos, empty_col_idx] = format_leave_date(use_date, leave_type)
+
+                    used_col_idx = list(df.columns).index("사용 연차")
+                    remain_col_idx = list(df.columns).index("잔여 연차")
+
+                    df.iat[row_pos, used_col_idx] = current_used + leave_amount
+                    df.iat[row_pos, remain_col_idx] = current_total - (current_used + leave_amount)
 
                     save_vacation_data_to_excel(df)
                     st.cache_data.clear()
@@ -974,8 +986,25 @@ def ensure_schedule_sheet_header(sheet):
 def load_schedule_data():
     sheet = get_schedule_sheet()
     ensure_schedule_sheet_header(sheet)
+
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
+
+    if df.empty:
+        return pd.DataFrame(columns=EXPECTED_COLUMNS)
+
+    for col in EXPECTED_COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[EXPECTED_COLUMNS]
+
+    df["수량"] = pd.to_numeric(df["수량"], errors="coerce").fillna(0).astype(int)
+    df["날짜"] = df["날짜"].astype(str)
+    df["완료일"] = df["완료일"].astype(str)
+    df["상태"] = df["상태"].astype(str).replace("", "진행중")
+
+    return df
 
     if df.empty:
         return pd.DataFrame(columns=EXPECTED_COLUMNS)
