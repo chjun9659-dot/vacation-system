@@ -293,7 +293,7 @@ def build_monthly_stats(df, target_year, target_month):
 
 
 @st.cache_data(ttl=60)
-def load_inspection_data():
+def load_vacation_data():
     df = pd.read_excel(VACATION_FILE_PATH, sheet_name=VACATION_SHEET_NAME, header=1)
     df.columns = [str(c).strip() for c in df.columns]
     df = df[df["이름"].notna()].copy()
