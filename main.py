@@ -1319,8 +1319,6 @@ def get_inspection_sheet():
     client = get_gspread_client()
     spreadsheet = client.open(INSPECTION_SHEET_NAME)
     worksheet = spreadsheet.worksheet("실사복구")
-    st.write("실사 연결 문서명:", spreadsheet.title)
-    st.write("실사 연결 시트명:", worksheet.title)
     return worksheet
 
 
