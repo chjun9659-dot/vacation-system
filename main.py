@@ -223,7 +223,6 @@ def format_leave_date(use_date, leave_type):
         return f"{date_str} (반차)"
     return date_str
 
-
 def parse_cancel_amount(value):
     text = str(value)
     return 0.5 if "반차" in text else 1.0
