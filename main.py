@@ -89,24 +89,28 @@ def draw_sidebar():
     if "sidebar_menu" not in st.session_state:
         st.session_state.sidebar_menu = "홈"
 
+    if "menu" not in st.session_state:
+        st.session_state.menu = "홈"
+
     if st.session_state.menu not in menu_list:
         st.session_state.menu = "홈"
 
-    # radio 만들기 전에 동기화
-    if st.session_state.sidebar_menu != st.session_state.menu:
+    if st.session_state.sidebar_menu not in menu_list:
         st.session_state.sidebar_menu = st.session_state.menu
 
     with st.sidebar:
         st.markdown(f"### 👤 {st.session_state.username}")
         st.caption(f"권한: {st.session_state.role}")
 
-        st.radio(
+        selected_menu = st.radio(
             "메뉴 선택",
             menu_list,
             key="sidebar_menu"
         )
 
-        st.session_state.menu = st.session_state.sidebar_menu
+        if selected_menu != st.session_state.menu:
+            st.session_state.menu = selected_menu
+            st.rerun()
 
         st.divider()
 
@@ -163,18 +167,21 @@ def home_page():
     with c1:
         if st.button("📊 연차 관리", use_container_width=True, key="home_btn_vacation"):
             st.session_state.menu = "연차 관리"
+            st.session_state.sidebar_menu = "연차 관리"
             st.rerun()
             return
 
     with c2:
         if st.button("📅 시공 일정", use_container_width=True, key="home_btn_schedule"):
             st.session_state.menu = "시공 일정"
+            st.session_state.sidebar_menu = "시공 일정"
             st.rerun()
             return
 
     with c3:
         if st.button("🔎 실사 관리", use_container_width=True, key="home_btn_inspection"):
             st.session_state.menu = "실사 관리"
+            st.session_state.sidebar_menu = "실사 관리"
             st.rerun()
             return
 
