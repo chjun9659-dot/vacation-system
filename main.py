@@ -1075,7 +1075,8 @@ def schedule_page():
 
     st.divider()
 
-    st.subheader("1. 시공 일정 등록")
+    with st.expander("📅 1. 시공 일정 등록", expanded=False):
+        with st.form("add_schedule_form_unique"):
 
     with st.form("add_schedule_form_unique"):
         a1, a2, a3 = st.columns(3)
