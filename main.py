@@ -406,31 +406,49 @@ def build_monthly_stats(df, target_year, target_month):
 
 @st.cache_data(ttl=60)
 def load_vacation_data():
-    df = pd.read_excel(VACATION_FILE_PATH, sheet_name=VACATION_SHEET_NAME, header=1)
-    df.columns = [str(c).strip() for c in df.columns]
+    sheet = get_vacation_sheet()
+    values = sheet.get_all_values()
 
-    # 중복 컬럼 제거
-    df = df.loc[:, ~df.columns.duplicated()].copy()
+    if not values or len(values) < 2:
+        return pd.DataFrame()
 
-    df = df[df["이름"].notna()].copy()
+    headers = [str(h).strip() for h in values[0]]
+    rows = values[1:]
 
-    for col in USE_COLS:
-        if col not in df.columns:
-            df[col] = None
+    # 빈 헤더 보정
+    fixed_headers = []
+    used = {}
 
-    # ✅ 사용일 컬럼은 문자열 저장 가능하도록 object 고정
-    for col in USE_COLS:
-        df[col] = df[col].astype("object")
+    for i, h in enumerate(headers):
+        if h == "":
+            h = f"빈컬럼{i+1}"
 
-    # ✅ 반차(0.5) 저장 가능하도록 연차 수치 컬럼은 float 고정
+        if h in used:
+            used[h] += 1
+            h = f"{h}_{used[h]}"
+        else:
+            used[h] = 1
+
+        fixed_headers.append(h)
+
+    df = pd.DataFrame(rows, columns=fixed_headers)
+
+    # 공백행 제거
+    if "이름" in df.columns:
+        df = df[df["이름"].astype(str).str.strip() != ""].copy()
+
     number_cols = ["발생 연차", "사용 연차", "잔여 연차"]
     for col in number_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(float)
 
+    for col in USE_COLS:
+        if col not in df.columns:
+            df[col] = None
+        df[col] = df[col].astype("object")
+
     df = recalculate_vacation_summary(df)
     return df
-
 
 def save_vacation_data_to_excel(df: pd.DataFrame):
     df = df.copy()
@@ -500,9 +518,9 @@ def vacation_page():
     with tool_col2:
         if st.button("🧮 연차 수치 재정리", use_container_width=True, key="vac_recalc_btn_unique"):
             df = recalculate_vacation_summary(df)
-            save_vacation_data_to_excel(df)
+            save_vacation_data(df)
             st.cache_data.clear()
-            st.success("사용일 기준으로 사용 연차 / 잔여 연차를 재정리했습니다.")
+            st.success(f"{leave_type} 등록 완료!")
             st.rerun()
 
     with tool_col3:
@@ -592,7 +610,7 @@ def vacation_page():
                     df.loc[idx, "사용 연차"] = float(current_used + leave_amount)
                     df.loc[idx, "잔여 연차"] = float(current_total - (current_used + leave_amount))
 
-                    save_vacation_data_to_excel(df)
+                    save_vacation_data(df)
                     st.cache_data.clear()
                     st.success(f"{leave_type} 등록 완료!")
                     st.rerun()
@@ -642,7 +660,7 @@ def vacation_page():
                 df.loc[idx, "사용 연차"] = new_used
                 df.loc[idx, "잔여 연차"] = new_remain
 
-                save_vacation_data_to_excel(df)
+                save_vacation_data(df)
                 st.cache_data.clear()
                 st.success("연차 취소 완료!")
                 st.rerun()
@@ -701,9 +719,9 @@ def vacation_page():
 
                     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-                    save_vacation_data_to_excel(df)
+                    save_vacation_data(df)
                     st.cache_data.clear()
-                    st.success(f"{new_name} 직원 추가 완료!")
+                    st.success(f"{leave_type} 등록 완료!")
                     st.rerun()
 
         st.markdown("---")
@@ -776,9 +794,9 @@ def vacation_page():
                             df.loc[idx, "사용 연차"] = new_used
                             df.loc[idx, "잔여 연차"] = new_remain
 
-                            save_vacation_data_to_excel(df)
+                            save_vacation_data(df)
                             st.cache_data.clear()
-                            st.success(f"{edited_name} 직원 정보 수정 완료!")
+                            st.success(f"{leave_type} 등록 완료!")
                             st.rerun()
 
         st.markdown("---")
@@ -798,9 +816,9 @@ def vacation_page():
                 if before_count == after_count:
                     st.error("삭제할 직원을 찾지 못했습니다.")
                 else:
-                    save_vacation_data_to_excel(df)
+                    save_vacation_data(df)
                     st.cache_data.clear()
-                    st.success(f"{delete_name} 직원 삭제 완료!")
+                    st.success(f"{leave_type} 등록 완료!")
                     st.rerun()
 
     with st.expander("📅 월별 연차 통계", expanded=False):
@@ -972,7 +990,27 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
 
     except Exception as e:
         raise Exception(f"파일 업로드 실패: {e}")
+@st.cache_resource
+def get_vacation_sheet():
+    client = get_gspread_client()
+    sheet = client.open("연차관리").sheet1
+    return sheet
 
+
+def save_vacation_data(df):
+    sheet = get_vacation_sheet()
+
+    save_df = df.copy()
+
+    for col in save_df.columns:
+        save_df[col] = save_df[col].astype(str)
+
+    save_df = save_df.replace("nan", "").replace("None", "")
+
+    rows = [save_df.columns.tolist()] + save_df.values.tolist()
+
+    sheet.clear()
+    sheet.update(rows)
 
 # =========================================================
 # 4. 시공 일정 시스템
