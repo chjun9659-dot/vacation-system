@@ -86,27 +86,17 @@ def login_screen():
 def draw_sidebar():
     menu_list = ["홈", "연차 관리", "시공 일정", "실사 관리"]
 
-    if "menu" not in st.session_state:
-        st.session_state.menu = "홈"
-
-    if "sidebar_menu" not in st.session_state:
-        st.session_state.sidebar_menu = st.session_state.menu
-
-    if st.session_state.menu not in menu_list:
-        st.session_state.menu = "홈"
-
-    if st.session_state.sidebar_menu not in menu_list:
-        st.session_state.sidebar_menu = st.session_state.menu
-
     with st.sidebar:
         st.markdown(f"### 👤 {st.session_state.username}")
         st.caption(f"권한: {st.session_state.role}")
 
+        if st.session_state.menu not in menu_list:
+            st.session_state.menu = "홈"
+
         selected_menu = st.radio(
             "메뉴 선택",
             menu_list,
-            index=menu_list.index(st.session_state.menu),
-            key="sidebar_menu"
+            index=menu_list.index(st.session_state.menu)
         )
 
         if selected_menu != st.session_state.menu:
@@ -181,7 +171,6 @@ def home_page():
         if st.button("🔎 실사 관리", use_container_width=True, key="home_btn_inspection"):
             st.session_state.menu = "실사 관리"
             st.rerun()
-            returnrun()
             return
 
     st.divider()
