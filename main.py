@@ -393,6 +393,10 @@ def build_monthly_stats(df, target_year, target_month):
 def load_vacation_data():
     df = pd.read_excel(VACATION_FILE_PATH, sheet_name=VACATION_SHEET_NAME, header=1)
     df.columns = [str(c).strip() for c in df.columns]
+
+    # 중복 컬럼 제거
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+
     df = df[df["이름"].notna()].copy()
 
     for col in USE_COLS:
@@ -546,6 +550,9 @@ def vacation_page():
                 st.error("잔여 연차가 부족합니다.")
             else:
                 empty_col = find_first_empty_use_col(df.loc[idx])
+                if empty_col not in df.columns:
+                    st.error(f"{empty_col} 컬럼을 찾지 못했습니다.")
+                    return
 
                 if empty_col is None:
                     st.error("사용일 칸이 모두 찼습니다. 사용일1~사용일30을 확인해주세요.")
