@@ -411,6 +411,10 @@ def load_vacation_data():
         if col not in df.columns:
             df[col] = None
 
+    # ✅ 사용일 컬럼은 문자열/반차표시 저장이 가능하도록 object로 고정
+    for col in USE_COLS:
+        df[col] = df[col].astype("object")
+
     df = recalculate_vacation_summary(df)
     return df
 
@@ -559,11 +563,6 @@ def vacation_page():
             else:
                 row_pos = df.index.get_loc(idx)
                 empty_col_idx = find_first_empty_use_col(df.iloc[row_pos], df.columns)
-
-                if empty_col_idx is None:
-                    st.error("사용일 칸이 모두 찼습니다. 사용일1~사용일30을 확인해주세요.")
-                else:
-                    df.iat[row_pos, empty_col_idx] = format_leave_date(use_date, leave_type)
 
                 if empty_col_idx is None:
                     st.error("사용일 칸이 모두 찼습니다. 사용일1~사용일30을 확인해주세요.")
