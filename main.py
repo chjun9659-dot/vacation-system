@@ -42,7 +42,13 @@ if "menu" not in st.session_state:
     st.session_state.menu = "홈"
 
 if "inspection_form_version" not in st.session_state:
-    st.session_state.inspection_form_version = 0    
+    st.session_state.inspection_form_version = 0
+    
+if "inspection_edit_mode" not in st.session_state:
+    st.session_state.inspection_edit_mode = False
+
+if "inspection_edit_target" not in st.session_state:
+    st.session_state.inspection_edit_target = None        
 
 
 def logout():
@@ -1636,69 +1642,123 @@ def inspection_page():
 
     with st.expander("✏️ 6. 상세 보기 / 수정", expanded=False):
         if df.empty:
-            st.info("수정할 내역이 없습니다.")
+            st.info("조회할 내역이 없습니다.")
         else:
-            edit_options = [
+            view_options = [
                 f"{row['row_id']} | {row['현장명']} | {row['상품구분']} | {row['진행상태']}"
                 for _, row in df.iterrows()
             ]
 
-            selected_edit = st.selectbox("수정 대상 선택", edit_options, key="insp_edit_select_new")
-            edit_idx = int(selected_edit.split("|")[0].strip())
-            edit_row = df.loc[df["row_id"] == edit_idx].iloc[0]
+            selected_view = st.selectbox("조회 대상 선택", view_options, key="insp_view_select_new")
+            view_idx = int(selected_view.split("|")[0].strip())
+            view_row = df.loc[df["row_id"] == view_idx].iloc[0]
 
-            req_date_raw = str(edit_row["요청일"]).strip()
-            parsed_req_date = pd.to_datetime(req_date_raw, errors="coerce")
-            default_req_date = parsed_req_date.date() if pd.notna(parsed_req_date) else date.today()
+            st.markdown("### 📄 상세보기")
 
-            with st.form(f"inspection_edit_form_{edit_idx}"):
-                e1, e2, e3 = st.columns(3)
-                edit_req_date = e1.date_input("요청일 수정", value=default_req_date)
-                edit_operator = e2.text_input("운영사 수정", value=str(edit_row["운영사"]))
-                edit_name = e3.text_input("현장명 수정", value=str(edit_row["현장명"]))
+            v1, v2, v3 = st.columns(3)
+            v1.text_input("요청일", value=str(view_row["요청일"]), disabled=True)
+            v2.text_input("운영사", value=str(view_row["운영사"]), disabled=True)
+            v3.text_input("현장명", value=str(view_row["현장명"]), disabled=True)
 
-                e4, e5, e6 = st.columns(3)
-                edit_addr = e4.text_input("현장주소 수정", value=str(edit_row["현장주소"]))
-                edit_phone = e5.text_input("현장연락처 수정", value=str(edit_row["현장연락처"]))
-                edit_product = e6.selectbox(
-                    "상품구분 수정",
-                    PRODUCT_OPTIONS,
-                    index=PRODUCT_OPTIONS.index(edit_row["상품구분"]) if edit_row["상품구분"] in PRODUCT_OPTIONS else 0
-                )
+            v4, v5, v6 = st.columns(3)
+            v4.text_input("현장주소", value=str(view_row["현장주소"]), disabled=True)
+            v5.text_input("현장연락처", value=str(view_row["현장연락처"]), disabled=True)
+            v6.text_input("상품구분", value=str(view_row["상품구분"]), disabled=True)
 
-                e7, e8, e9 = st.columns(3)
-                edit_parking = e7.number_input("주차면수 수정", min_value=0, step=1, value=safe_int(edit_row["주차면수"], 0))
-                edit_new_qty = e8.number_input("신규설치수량 수정", min_value=0, step=1, value=safe_int(edit_row["신규설치수량"], 0))
-                edit_old_qty = e9.number_input("기설치수량 수정", min_value=0, step=1, value=safe_int(edit_row["기설치수량"], 0))
+            v7, v8, v9 = st.columns(3)
+            v7.text_input("주차면수", value=str(view_row["주차면수"]), disabled=True)
+            v8.text_input("신규설치수량", value=str(view_row["신규설치수량"]), disabled=True)
+            v9.text_input("기설치수량", value=str(view_row["기설치수량"]), disabled=True)
 
-                e10, e11 = st.columns(2)
-                edit_sales = e10.text_input("영업담당자 수정", value=str(edit_row["영업담당자"]))
-                edit_sales_phone = e11.text_input("영업담당자 연락처 수정", value=str(edit_row["영업담당연락처"]))
+            v10, v11 = st.columns(2)
+            v10.text_input("영업담당자", value=str(view_row["영업담당자"]), disabled=True)
+            v11.text_input("영업담당자 연락처", value=str(view_row["영업담당연락처"]), disabled=True)
 
-                edit_request = st.text_area("요청내용 수정", value=str(edit_row["요청내용"]))
-                edit_note = st.text_input("비고 수정", value=str(edit_row["비고"]))
+            st.text_area("요청내용", value=str(view_row["요청내용"]), disabled=True)
+            st.text_input("비고", value=str(view_row["비고"]), disabled=True)
 
-                edit_submit = st.form_submit_button("기본 정보 수정 저장")
+            if str(view_row["첨부파일링크"]).strip():
+                st.link_button("첨부파일 열기", str(view_row["첨부파일링크"]))
 
-                if edit_submit:
-                    save_df = df[INSPECTION_COLUMNS].copy()
-                    save_df.loc[edit_idx, "요청일"] = str(edit_req_date)
-                    save_df.loc[edit_idx, "운영사"] = edit_operator.strip()
-                    save_df.loc[edit_idx, "현장명"] = edit_name.strip()
-                    save_df.loc[edit_idx, "현장주소"] = edit_addr.strip()
-                    save_df.loc[edit_idx, "현장연락처"] = edit_phone.strip()
-                    save_df.loc[edit_idx, "상품구분"] = edit_product
-                    save_df.loc[edit_idx, "주차면수"] = int(edit_parking)
-                    save_df.loc[edit_idx, "신규설치수량"] = int(edit_new_qty)
-                    save_df.loc[edit_idx, "기설치수량"] = int(edit_old_qty)
-                    save_df.loc[edit_idx, "영업담당자"] = edit_sales.strip()
-                    save_df.loc[edit_idx, "영업담당연락처"] = edit_sales_phone.strip()
-                    save_df.loc[edit_idx, "요청내용"] = edit_request.strip()
-                    save_df.loc[edit_idx, "비고"] = edit_note.strip()
-                    save_inspection_data(save_df)
+            btn_col1, btn_col2 = st.columns(2)
 
-                    set_inspection_flash("기본 정보 수정 완료!", "success")
+            with btn_col1:
+                if st.button("수정", use_container_width=True, key=f"insp_edit_mode_btn_{view_idx}"):
+                    st.session_state.inspection_edit_mode = True
+                    st.session_state.inspection_edit_target = view_idx
                     st.rerun()
+
+            with btn_col2:
+                st.write("")
+
+            if (
+                st.session_state.get("inspection_edit_mode", False)
+                and st.session_state.get("inspection_edit_target") == view_idx
+            ):
+                st.divider()
+                st.markdown("### ✏️ 수정 모드")
+
+                req_date_raw = str(view_row["요청일"]).strip()
+                parsed_req_date = pd.to_datetime(req_date_raw, errors="coerce")
+                default_req_date = parsed_req_date.date() if pd.notna(parsed_req_date) else date.today()
+
+                with st.form(f"inspection_edit_form_{view_idx}"):
+                    e1, e2, e3 = st.columns(3)
+                    edit_req_date = e1.date_input("요청일 수정", value=default_req_date)
+                    edit_operator = e2.text_input("운영사 수정", value=str(view_row["운영사"]))
+                    edit_name = e3.text_input("현장명 수정", value=str(view_row["현장명"]))
+
+                    e4, e5, e6 = st.columns(3)
+                    edit_addr = e4.text_input("현장주소 수정", value=str(view_row["현장주소"]))
+                    edit_phone = e5.text_input("현장연락처 수정", value=str(view_row["현장연락처"]))
+                    edit_product = e6.selectbox(
+                        "상품구분 수정",
+                        PRODUCT_OPTIONS,
+                        index=PRODUCT_OPTIONS.index(view_row["상품구분"]) if view_row["상품구분"] in PRODUCT_OPTIONS else 0
+                    )
+
+                    e7, e8, e9 = st.columns(3)
+                    edit_parking = e7.number_input("주차면수 수정", min_value=0, step=1, value=safe_int(view_row["주차면수"], 0))
+                    edit_new_qty = e8.number_input("신규설치수량 수정", min_value=0, step=1, value=safe_int(view_row["신규설치수량"], 0))
+                    edit_old_qty = e9.number_input("기설치수량 수정", min_value=0, step=1, value=safe_int(view_row["기설치수량"], 0))
+
+                    e10, e11 = st.columns(2)
+                    edit_sales = e10.text_input("영업담당자 수정", value=str(view_row["영업담당자"]))
+                    edit_sales_phone = e11.text_input("영업담당자 연락처 수정", value=str(view_row["영업담당연락처"]))
+
+                    edit_request = st.text_area("요청내용 수정", value=str(view_row["요청내용"]))
+                    edit_note = st.text_input("비고 수정", value=str(view_row["비고"]))
+
+                    s1, s2 = st.columns(2)
+                    save_submit = s1.form_submit_button("기본 정보 수정 저장", use_container_width=True)
+                    cancel_submit = s2.form_submit_button("취소", use_container_width=True)
+
+                    if save_submit:
+                        save_df = df[INSPECTION_COLUMNS].copy()
+                        save_df.loc[view_idx, "요청일"] = str(edit_req_date)
+                        save_df.loc[view_idx, "운영사"] = edit_operator.strip()
+                        save_df.loc[view_idx, "현장명"] = edit_name.strip()
+                        save_df.loc[view_idx, "현장주소"] = edit_addr.strip()
+                        save_df.loc[view_idx, "현장연락처"] = edit_phone.strip()
+                        save_df.loc[view_idx, "상품구분"] = edit_product
+                        save_df.loc[view_idx, "주차면수"] = int(edit_parking)
+                        save_df.loc[view_idx, "신규설치수량"] = int(edit_new_qty)
+                        save_df.loc[view_idx, "기설치수량"] = int(edit_old_qty)
+                        save_df.loc[view_idx, "영업담당자"] = edit_sales.strip()
+                        save_df.loc[view_idx, "영업담당연락처"] = edit_sales_phone.strip()
+                        save_df.loc[view_idx, "요청내용"] = edit_request.strip()
+                        save_df.loc[view_idx, "비고"] = edit_note.strip()
+                        save_inspection_data(save_df)
+
+                        st.session_state.inspection_edit_mode = False
+                        st.session_state.inspection_edit_target = None
+                        set_inspection_flash("기본 정보 수정 완료!", "success")
+                        st.rerun()
+
+                    if cancel_submit:
+                        st.session_state.inspection_edit_mode = False
+                        st.session_state.inspection_edit_target = None
+                        st.rerun()
 
     st.divider()
 
