@@ -411,15 +411,28 @@ def load_vacation_data():
         if col not in df.columns:
             df[col] = None
 
-    # ✅ 사용일 컬럼은 문자열/반차표시 저장이 가능하도록 object로 고정
+    # ✅ 사용일 컬럼은 문자열 저장 가능하도록 object 고정
     for col in USE_COLS:
         df[col] = df[col].astype("object")
+
+    # ✅ 반차(0.5) 저장 가능하도록 연차 수치 컬럼은 float 고정
+    number_cols = ["발생 연차", "사용 연차", "잔여 연차"]
+    for col in number_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(float)
 
     df = recalculate_vacation_summary(df)
     return df
 
 
 def save_vacation_data_to_excel(df: pd.DataFrame):
+    df = df.copy()
+
+    # ✅ 숫자 컬럼 강제 float 처리 (반차 0.5 대응)
+    for col in ["발생 연차", "사용 연차", "잔여 연차"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(float)
+
     wb = load_workbook(VACATION_FILE_PATH)
     ws = wb[VACATION_SHEET_NAME]
 
@@ -554,9 +567,9 @@ def vacation_page():
         if register_btn:
             idx = df[df["이름"] == selected_name].index[0]
 
-            current_total = to_number(df.loc[idx, "발생 연차"])
-            current_used = to_number(df.loc[idx, "사용 연차"])
-            current_remain = to_number(df.loc[idx, "잔여 연차"])
+            current_total = float(to_number(df.loc[idx, "발생 연차"]))
+            current_used = float(to_number(df.loc[idx, "사용 연차"]))
+            current_remain = float(to_number(df.loc[idx, "잔여 연차"]))
 
             if current_remain < leave_amount:
                 st.error("잔여 연차가 부족합니다.")
@@ -569,11 +582,8 @@ def vacation_page():
                 else:
                     df.iat[row_pos, empty_col_idx] = format_leave_date(use_date, leave_type)
 
-                    used_col_idx = list(df.columns).index("사용 연차")
-                    remain_col_idx = list(df.columns).index("잔여 연차")
-
-                    df.iat[row_pos, used_col_idx] = current_used + leave_amount
-                    df.iat[row_pos, remain_col_idx] = current_total - (current_used + leave_amount)
+                    df.loc[idx, "사용 연차"] = float(current_used + leave_amount)
+                    df.loc[idx, "잔여 연차"] = float(current_total - (current_used + leave_amount))
 
                     save_vacation_data_to_excel(df)
                     st.cache_data.clear()
