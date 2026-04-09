@@ -84,11 +84,11 @@ def login_screen():
 # 1. 공통 UI
 # =========================================================
 def draw_sidebar():
+    menu_list = ["홈", "연차 관리", "시공 일정", "실사 관리"]
+
     with st.sidebar:
         st.markdown(f"### 👤 {st.session_state.username}")
         st.caption(f"권한: {st.session_state.role}")
-
-        menu_list = ["홈", "연차 관리", "시공 일정", "실사 관리"]
 
         if st.session_state.menu not in menu_list:
             st.session_state.menu = "홈"
@@ -96,8 +96,7 @@ def draw_sidebar():
         menu = st.radio(
             "메뉴 선택",
             menu_list,
-            index=menu_list.index(st.session_state.menu),
-            key="sidebar_menu_radio_unique"
+            index=menu_list.index(st.session_state.menu)
         )
         st.session_state.menu = menu
 
@@ -108,19 +107,79 @@ def draw_sidebar():
 
 
 def home_page():
-    st.title("🏢 윤우 통합 운영 시스템")
-    st.write("회사용 내부 운영 시스템입니다.")
+    if st.session_state.menu != "홈":
+        return
+    st.markdown("""
+    <style>
+    .home-title {
+        font-size: 28px;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 6px;
+    }
+    .home-desc {
+        font-size: 14px;
+        color: #475569;
+        margin-bottom: 18px;
+    }
+    .home-guide-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-top: 10px;
+        margin-bottom: 8px;
+    }
+    .home-guide-box {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 16px 18px;
+        line-height: 1.8;
+        color: #0f172a;
+        font-size: 15px;
+    }
+    div.stButton > button {
+        border-radius: 12px !important;
+        min-height: 72px !important;
+        font-size: 20px !important;
+        font-weight: 700 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="home-title">🏢 윤우 통합 운영 시스템</div>', unsafe_allow_html=True)
+    st.markdown('<div class="home-desc">회사용 내부 운영 시스템입니다.</div>', unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
-    c1.info("📊 연차 관리")
-    c2.info("📅 시공 일정")
-    c3.info("🔎 실사 관리")
+
+    with c1:
+        if st.button("📊 연차 관리", use_container_width=True, key="home_btn_vacation"):
+            st.session_state.menu = "연차 관리"
+            st.rerun()
+            return
+
+    with c2:
+        if st.button("📅 시공 일정", use_container_width=True, key="home_btn_schedule"):
+            st.session_state.menu = "시공 일정"
+            st.rerun()
+            return
+
+    with c3:
+        if st.button("🔎 실사 관리", use_container_width=True, key="home_btn_inspection"):
+            st.session_state.menu = "실사 관리"
+            st.rerun()
+            return
 
     st.divider()
 
-    st.subheader("빠른 안내")
-    st.write("- 좌측 메뉴에서 원하는 시스템을 선택하세요.")
-    st.write("- 현재는 하나의 앱에서 연차 / 시공일정 / 실사관리를 함께 사용할 수 있습니다.")
+    st.markdown('<div class="home-guide-title">빠른 안내</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="home-guide-box">
+    • 좌측 메뉴에서 원하는 시스템을 선택하세요.<br>
+    • 메인 화면 버튼을 눌러도 각 시스템으로 바로 이동할 수 있습니다.<br>
+    • 현재는 하나의 앱에서 연차 / 시공일정 / 실사관리를 함께 사용할 수 있습니다.
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # =========================================================
@@ -334,7 +393,10 @@ def save_vacation_data_to_excel(df: pd.DataFrame):
 
 
 def vacation_page():
-    st.title("📊 윤우테크 연차 관리 프로그램")
+    render_inspection_common_style()
+
+    st.markdown('<div class="erp-page-title">윤우테크 연차 관리 프로그램</div>', unsafe_allow_html=True)
+    st.markdown('<div class="erp-page-desc">연차 관리 및 현황 확인 프로그램입니다.</div>', unsafe_allow_html=True)
 
     try:
         df = load_vacation_data()
@@ -885,8 +947,10 @@ def save_schedule_data(df, sheet=None):
 
 
 def schedule_page():
-    st.title("📅 시공 일정 관리 프로그램")
-    st.write("시공팀 일정 등록, 수정, 완료 체크, 진행 현황 확인용 프로그램입니다.")
+    render_inspection_common_style()
+
+    st.markdown('<div class="erp-page-title">시공 일정 관리 프로그램</div>', unsafe_allow_html=True)
+    st.markdown('<div class="erp-page-desc">시공 일정 등록, 수정, 진행 현황 관리</div>', unsafe_allow_html=True)
 
     try:
         df = load_schedule_data()
@@ -1169,7 +1233,7 @@ INSPECTION_STATUS_OPTIONS = [
     "미계약종결"
 ]
 
-PRODUCT_OPTIONS = ["아이센서", "전기차충전기"]
+PRODUCT_OPTIONS = ["아이센서", "전기차충전기", "이전설치"]
 CONTRACT_OPTIONS = ["대기", "계약", "미계약"]
 
 
@@ -1311,10 +1375,125 @@ def save_inspection_data(df, sheet=None):
     sheet.clear()
     sheet.update(rows)
 
+def render_inspection_common_style():
+    st.markdown("""
+    <style>
+    .erp-page-title {
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin-bottom: 4px !important;
+}
+
+.erp-page-desc {
+    font-size: 14px !important;
+    color: #64748b !important;
+    margin-bottom: 20px !important;
+}
+
+    .erp-summary-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 12px 14px;
+        min-height: 88px;
+    }
+
+    .erp-summary-label {
+        font-size: 12px;
+        color: #64748b;
+        margin-bottom: 10px;
+    }
+
+    .erp-summary-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.2;
+    }
+
+    .erp-section-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 10px;
+    }
+
+    .erp-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 6px;
+    }
+
+    .erp-box {
+        border: 1px solid #dbe3ee;
+        border-radius: 10px;
+        background: #eef5ff;
+        padding: 11px 13px;
+        min-height: 44px;
+        font-size: 14px;
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+    }
+
+    .erp-soft-box {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 14px;
+        font-size: 14px;
+        color: #0f172a;
+        line-height: 1.6;
+    }
+
+    .erp-divider {
+        margin: 14px 0 18px 0;
+    }
+
+    div[data-testid="stExpander"] {
+        border: 1px solid #e5e7eb !important;
+        border-radius: 12px !important;
+        background: #ffffff !important;
+    }
+
+    div[data-testid="stExpander"] details summary p {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #0f172a !important;
+    }
+
+    div[data-testid="stDataFrame"] {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    div[data-testid="stForm"] {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 14px 14px 6px 14px;
+    }
+
+    button[kind="primary"] {
+        border-radius: 10px !important;
+    }
+
+    button[kind="secondary"] {
+        border-radius: 10px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 def inspection_page():
-    st.title("🔎 실사 관리 프로그램")
-    st.write("실사 요청 등록 → 담당자 배정 → 일정 입력 → 결과 작성 → 계약 여부 관리")
+    render_inspection_common_style()
+
+    st.markdown('<div class="erp-page-title">🔎 실사 관리 프로그램</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="erp-page-desc">실사 요청 등록 → 담당자 배정 → 일정 입력 → 결과 작성 → 계약 여부 관리</div>',
+        unsafe_allow_html=True
+    )
 
     show_inspection_flash()
 
@@ -1328,16 +1507,67 @@ def inspection_page():
     done_count = len(df[df["진행상태"] == "실사완료"])
     contract_done_count = len(df[df["계약여부"] == "계약"])
 
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("전체 요청", total_count)
-    m2.metric("요청접수", pending_count)
-    m3.metric("진행중", assigned_count)
-    m4.metric("실사완료", done_count)
-    m5.metric("계약완료", contract_done_count)
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    with c1:
+        st.markdown(
+            f"""
+            <div class="erp-summary-card">
+                <div class="erp-summary-label">전체 요청</div>
+                <div class="erp-summary-value">{total_count}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with c2:
+        st.markdown(
+            f"""
+            <div class="erp-summary-card">
+                <div class="erp-summary-label">요청접수</div>
+                <div class="erp-summary-value">{pending_count}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with c3:
+        st.markdown(
+            f"""
+            <div class="erp-summary-card">
+                <div class="erp-summary-label">진행중</div>
+                <div class="erp-summary-value">{assigned_count}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with c4:
+        st.markdown(
+            f"""
+            <div class="erp-summary-card">
+                <div class="erp-summary-label">실사완료</div>
+                <div class="erp-summary-value">{done_count}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with c5:
+        st.markdown(
+            f"""
+            <div class="erp-summary-card">
+                <div class="erp-summary-label">계약완료</div>
+                <div class="erp-summary-value">{contract_done_count}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.divider()
 
     with st.expander("📝 1. 실사 요청 등록", expanded=False):
+        st.markdown('<div class="erp-section-title">실사 요청 등록</div>', unsafe_allow_html=True)
         form_ver = st.session_state.inspection_form_version
 
         with st.form(f"inspection_request_form_new_{form_ver}"):
@@ -1433,6 +1663,9 @@ def inspection_page():
     st.divider()
 
     with st.expander("📋 2. 전체 실사 현황", expanded=False):
+        st.markdown('<div class="erp-section-title">전체 실사 현황</div>', unsafe_allow_html=True)
+        st.markdown('<div class="erp-soft-box">전체 실사 데이터를 확인합니다.</div>', unsafe_allow_html=True)
+
         status_list = ["전체"] + INSPECTION_STATUS_OPTIONS
         product_list = ["전체"] + PRODUCT_OPTIONS
         contract_list = ["전체"] + CONTRACT_OPTIONS
@@ -1472,17 +1705,40 @@ def inspection_page():
             "실사담당자", "실사예정일", "진행상태", "계약여부"
         ]].copy()
 
+        def status_style(val):
+            if str(val) == "요청접수":
+                return "background-color: #fef3c7; color: #92400e; font-weight: 600;"
+            elif str(val) in ["담당자배정", "일정확정", "실사진행"]:
+                return "background-color: #dbeafe; color: #1d4ed8; font-weight: 600;"
+            elif str(val) == "실사완료":
+                return "background-color: #dcfce7; color: #166534; font-weight: 600;"
+            elif str(val) == "계약완료":
+                return "background-color: #dcfce7; color: #166534; font-weight: 700;"
+            elif str(val) == "미계약종결":
+                return "background-color: #fee2e2; color: #991b1b; font-weight: 600;"
+            return ""
+
+        def contract_style(val):
+            if str(val) == "계약":
+                return "background-color: #dcfce7; color: #166534; font-weight: 700;"
+            elif str(val) == "미계약":
+                return "background-color: #fee2e2; color: #991b1b; font-weight: 700;"
+            elif str(val) == "대기":
+                return "background-color: #f3f4f6; color: #374151; font-weight: 600;"
+            return ""
+
         if show_df.empty:
             st.info("조건에 맞는 실사 내역이 없습니다.")
         else:
             show_df["첨부파일열기"] = show_df["첨부파일링크"]
             show_df["첨부파일명"] = show_df["첨부파일명"].replace("", "-")
 
-            st.data_editor(
-                show_df,
+            styled_df = show_df.style.map(status_style, subset=["진행상태"]).map(contract_style, subset=["계약여부"])
+
+            st.dataframe(
+                styled_df,
                 use_container_width=True,
                 hide_index=True,
-                disabled=True,
                 column_config={
                     "첨부파일링크": None,
                     "첨부파일열기": st.column_config.LinkColumn(
@@ -1491,7 +1747,8 @@ def inspection_page():
                     )
                 }
             )
-            st.caption("이제 첨부파일 링크를 복붙하지 않고 '열기'로 바로 확인할 수 있습니다.")
+
+            st.caption("상태와 계약여부는 색상으로 구분되며, 첨부파일은 '열기'로 바로 확인할 수 있습니다.")
 
     st.divider()
 
