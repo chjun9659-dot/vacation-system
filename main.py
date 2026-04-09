@@ -326,6 +326,35 @@ def parse_use_entry(value):
 
     return parsed_date, amount
 
+def recalculate_vacation_summary(df: pd.DataFrame):
+    for idx in df.index:
+        total_leave = to_number(df.loc[idx, "발생 연차"])
+        used_leave = 0.0
+
+        for col in USE_COLS:
+            if col not in df.columns:
+                continue
+
+            value = df.loc[idx, col]
+
+            if pd.isna(value):
+                continue
+
+            text = str(value).strip()
+            if text == "" or text.lower() == "none":
+                continue
+
+            if "반차" in text:
+                used_leave += 0.5
+            else:
+                used_leave += 1.0
+
+        remain_leave = total_leave - used_leave
+
+        df.loc[idx, "사용 연차"] = used_leave
+        df.loc[idx, "잔여 연차"] = remain_leave
+
+    return df
 
 def build_monthly_stats(df, target_year, target_month):
     rows = []
@@ -370,6 +399,7 @@ def load_vacation_data():
         if col not in df.columns:
             df[col] = None
 
+    df = recalculate_vacation_summary(df)
     return df
 
 
@@ -377,17 +407,35 @@ def save_vacation_data_to_excel(df: pd.DataFrame):
     wb = load_workbook(VACATION_FILE_PATH)
     ws = wb[VACATION_SHEET_NAME]
 
-    start_row = 3
-    max_row = ws.max_row
-    max_col = ws.max_column
+    header_row = 2     # 실제 헤더 행
+    start_row = 3      # 실제 데이터 시작 행
 
-    for r in range(start_row, max_row + 1):
-        for c in range(1, max_col + 1):
-            ws.cell(row=r, column=c).value = None
+    # 엑셀 헤더 읽기
+    excel_headers = []
+    for c in range(1, ws.max_column + 1):
+        v = ws.cell(row=header_row, column=c).value
+        excel_headers.append(str(v).strip() if v is not None else "")
 
-    for row_idx, row in enumerate(df.itertuples(index=False), start=start_row):
-        for col_idx, value in enumerate(row, start=1):
-            ws.cell(row=row_idx, column=col_idx).value = value
+    # 헤더명 -> 엑셀 컬럼번호
+    col_map = {name: idx for idx, name in enumerate(excel_headers, start=1) if name}
+
+    # df에 있는 컬럼만 엑셀에서 지우기
+    last_row = max(ws.max_row, start_row + len(df) + 50)
+    for r in range(start_row, last_row + 1):
+        for col_name in df.columns:
+            if col_name in col_map:
+                ws.cell(row=r, column=col_map[col_name]).value = None
+
+    # 헤더명 기준으로 정확히 저장
+    for row_idx, (_, row) in enumerate(df.iterrows(), start=start_row):
+        for col_name in df.columns:
+            if col_name in col_map:
+                value = row[col_name]
+
+                if pd.isna(value):
+                    value = None
+
+                ws.cell(row=row_idx, column=col_map[col_name]).value = value
 
     wb.save(VACATION_FILE_PATH)
 
@@ -404,9 +452,9 @@ def vacation_page():
         st.error(f"연차 파일을 불러오지 못했습니다: {e}")
         return
 
-    st.subheader("🛠️ 관리 도구")
+        st.subheader("🛠️ 관리 도구")
 
-    tool_col1, tool_col2 = st.columns(2)
+    tool_col1, tool_col2, tool_col3 = st.columns(3)
 
     with tool_col1:
         if st.button("💾 지금 백업하기", use_container_width=True, key="vac_backup_btn_unique"):
@@ -414,6 +462,14 @@ def vacation_page():
             st.success(f"백업 완료: {backup_file}")
 
     with tool_col2:
+        if st.button("🧮 연차 수치 재정리", use_container_width=True, key="vac_recalc_btn_unique"):
+            df = recalculate_vacation_summary(df)
+            save_vacation_data_to_excel(df)
+            st.cache_data.clear()
+            st.success("사용일 기준으로 사용 연차 / 잔여 연차를 재정리했습니다.")
+            st.rerun()
+
+    with tool_col3:
         if os.path.exists(VACATION_BACKUP_DIR):
             backup_files = sorted(os.listdir(VACATION_BACKUP_DIR), reverse=True)
             st.write(f"백업 파일 수: {len(backup_files)}")
@@ -1698,11 +1754,25 @@ def inspection_page():
             ].copy()
 
         show_df = filtered_df[[
-            "요청일", "운영사", "현장명", "현장주소", "현장연락처",
-            "주차면수", "상품구분", "신규설치수량", "기설치수량",
-            "영업담당자", "영업담당연락처",
-            "첨부파일명", "첨부파일링크",
-            "실사담당자", "실사예정일", "진행상태", "계약여부"
+            "요청일",
+            "상품구분",
+            "현장명",
+            "현장주소",
+            "현장연락처",
+            "운영사",
+            "신규설치수량",
+            "기설치수량",
+            "주차면수",
+
+            "영업담당자",
+            "영업담당연락처",
+
+            "실사담당자",
+            "실사예정일",
+            "진행상태",
+            "계약여부",
+
+            "첨부파일링크"
         ]].copy()
 
         def status_style(val):
@@ -1731,7 +1801,6 @@ def inspection_page():
             st.info("조건에 맞는 실사 내역이 없습니다.")
         else:
             show_df["첨부파일열기"] = show_df["첨부파일링크"]
-            show_df["첨부파일명"] = show_df["첨부파일명"].replace("", "-")
 
             styled_df = show_df.style.map(status_style, subset=["진행상태"]).map(contract_style, subset=["계약여부"])
 
