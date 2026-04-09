@@ -656,14 +656,15 @@ def vacation_page():
                 new_used = max(0, current_used - cancel_amount)
                 new_remain = current_total - new_used
 
-                df.loc[idx, selected_col] = None
-                df.loc[idx, "사용 연차"] = new_used
-                df.loc[idx, "잔여 연차"] = new_remain
+                df.loc[idx, selected_col] = ""
+                df.loc[idx, "사용 연차"] = float(new_used)
+                df.loc[idx, "잔여 연차"] = float(new_remain)
 
                 save_vacation_data(df)
                 st.cache_data.clear()
                 st.success("연차 취소 완료!")
                 st.rerun()
+                
         else:
             st.info("취소할 사용일이 없습니다.")
 
@@ -1002,15 +1003,22 @@ def save_vacation_data(df):
 
     save_df = df.copy()
 
-    for col in save_df.columns:
-        save_df[col] = save_df[col].astype(str)
+    if "row_id" in save_df.columns:
+        save_df = save_df.drop(columns=["row_id"])
 
-    save_df = save_df.replace("nan", "").replace("None", "")
+    save_df.columns = [str(col).strip() for col in save_df.columns]
+    save_df = save_df.where(pd.notnull(save_df), "")
+
+    for col in save_df.columns:
+        save_df[col] = save_df[col].apply(lambda x: "" if x is None else str(x).strip())
 
     rows = [save_df.columns.tolist()] + save_df.values.tolist()
 
-    sheet.clear()
-    sheet.update(rows)
+    # ❌ clear 제거
+    # sheet.clear()
+
+    # ✅ 안전 방식
+    sheet.update("A1", rows)
 
 # =========================================================
 # 4. 시공 일정 시스템
