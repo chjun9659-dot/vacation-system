@@ -461,7 +461,7 @@ def vacation_page():
         st.error(f"연차 파일을 불러오지 못했습니다: {e}")
         return
 
-        st.subheader("🛠️ 관리 도구")
+    st.subheader("🛠️ 관리 도구")
 
     tool_col1, tool_col2, tool_col3 = st.columns(3)
 
@@ -1006,20 +1006,6 @@ def load_schedule_data():
 
     return df
 
-    if df.empty:
-        return pd.DataFrame(columns=EXPECTED_COLUMNS)
-
-    for col in EXPECTED_COLUMNS:
-        if col not in df.columns:
-            df[col] = ""
-
-    df = df[EXPECTED_COLUMNS]
-    df["수량"] = pd.to_numeric(df["수량"], errors="coerce").fillna(0).astype(int)
-    df["날짜"] = df["날짜"].astype(str)
-    df["완료일"] = df["완료일"].astype(str)
-    df["상태"] = df["상태"].astype(str).replace("", "진행중")
-    return df
-
 
 def save_schedule_data(df, sheet=None):
     if sheet is None:
@@ -1331,7 +1317,11 @@ CONTRACT_OPTIONS = ["대기", "계약", "미계약"]
 
 def get_inspection_sheet():
     client = get_gspread_client()
-    return client.open(INSPECTION_SHEET_NAME).sheet1
+    spreadsheet = client.open(INSPECTION_SHEET_NAME)
+    worksheet = spreadsheet.worksheet("실사복구")
+    st.write("실사 연결 문서명:", spreadsheet.title)
+    st.write("실사 연결 시트명:", worksheet.title)
+    return worksheet
 
 
 def safe_int(value, default=0):
@@ -1383,78 +1373,73 @@ def normalize_inspection_df(df):
 
     return df
 
-
+@st.cache_data(ttl=60)
 def load_inspection_data():
     try:
         sheet = get_inspection_sheet()
         values = sheet.get_all_values()
 
         if not values:
-            sheet.update(f"A1:AA1", [INSPECTION_COLUMNS])
             return pd.DataFrame(columns=INSPECTION_COLUMNS)
 
-        raw_rows = values
-        header = [str(x).strip() for x in raw_rows[0]]
+        header = values[0]
+        data_rows = values[1:]
 
-        data_rows = raw_rows[1:] if len(raw_rows) > 1 else []
+        # 👉 기존 데이터 그대로 로드
+        temp_df = pd.DataFrame(data_rows, columns=header)
 
-        fixed_rows = []
-        for row in data_rows:
-            row = row + [""] * (len(INSPECTION_COLUMNS) - len(row))
-            fixed_rows.append(row[:len(INSPECTION_COLUMNS)])
+        # 👉 새로운 DF 생성
+        df = pd.DataFrame(columns=INSPECTION_COLUMNS)
 
-        if fixed_rows:
-            if header == INSPECTION_COLUMNS:
-                df = pd.DataFrame(fixed_rows, columns=INSPECTION_COLUMNS)
-            else:
-                # 기존 구조를 최대한 살려서 새 컬럼으로 이관
-                temp_df = pd.DataFrame(data_rows, columns=header[:len(data_rows[0])] if data_rows and header else header)
-                df = pd.DataFrame(columns=INSPECTION_COLUMNS)
+        # 👉 컬럼 매핑 (안전 버전)
+        column_map = {
+            "요청일": "요청일",
+            "운영사": "운영사",
+            "현장명": "현장명",
+            "단지명": "현장명",
+            "현장주소": "현장주소",
+            "주소": "현장주소",
+            "현장연락처": "현장연락처",
+            "전화번호": "현장연락처",
+            "주차면수": "주차면수",
+            "상품구분": "상품구분",
+            "신규설치수량": "신규설치수량",
+            "수량": "신규설치수량",
+            "기설치수량": "기설치수량",
+            "영업담당자": "영업담당자",
+            "영업담당연락처": "영업담당연락처",
+            "요청내용": "요청내용",
+            "비고": "비고",
+            "첨부파일명": "첨부파일명",
+            "첨부파일링크": "첨부파일링크",
+            "실사담당자": "실사담당자",
+            "실사예정일": "실사예정일",
+            "실사완료일": "실사완료일",
+            "진행상태": "진행상태",
+            "실사결과": "실사결과",
+            "특이사항": "특이사항",
+            "후속조치": "후속조치",
+            "계약여부": "계약여부",
+            "계약일": "계약일",
+            "계약수량": "계약수량",
+            "계약금액": "계약금액",
+            "미계약사유": "미계약사유",
+        }
 
-                old_to_new_map = {
-                    "요청일": "요청일",
-                    "단지명": "현장명",
-                    "상품구분": "상품구분",
-                    "수량": "신규설치수량",
-                    "주소": "현장주소",
-                    "영업담당자": "영업담당자",
-                    "요청내용": "요청내용",
-                    "비고": "비고",
-                    "첨부파일명": "첨부파일명",
-                    "첨부파일링크": "첨부파일링크",
-                    "실사담당자": "실사담당자",
-                    "실사예정일": "실사예정일",
-                    "실사완료일": "실사완료일",
-                    "진행상태": "진행상태",
-                    "실사결과": "실사결과",
-                    "특이사항": "특이사항",
-                    "후속조치": "후속조치",
-                    "계약여부": "계약여부",
-                    "계약일": "계약일",
-                    "계약수량": "계약수량",
-                    "계약금액": "계약금액",
-                    "미계약사유": "미계약사유",
-                }
+        # 👉 안전하게 매핑
+        for old_col, new_col in column_map.items():
+            if old_col in temp_df.columns:
+                df[new_col] = temp_df[old_col]
 
-                for old_col, new_col in old_to_new_map.items():
-                    if old_col in temp_df.columns:
-                        df[new_col] = temp_df[old_col]
-
-                for col in INSPECTION_COLUMNS:
-                    if col not in df.columns:
-                        df[col] = ""
-        else:
-            df = pd.DataFrame(columns=INSPECTION_COLUMNS)
-
-        df = normalize_inspection_df(df)
-
-        if header != INSPECTION_COLUMNS:
-            save_inspection_data(df, sheet)
+        # 👉 없는 컬럼 채우기
+        for col in INSPECTION_COLUMNS:
+            if col not in df.columns:
+                df[col] = ""
 
         return df
 
     except Exception as e:
-        st.warning(f"실사관리 시트 읽기 중 경고가 있었지만 빈 화면으로 시작합니다: {e}")
+        st.error(f"실사 데이터를 불러오지 못했습니다: {e}")
         return pd.DataFrame(columns=INSPECTION_COLUMNS)
 
 
@@ -1866,7 +1851,11 @@ def inspection_page():
                 for _, row in df.iterrows()
             ]
 
-            selected_assign = st.selectbox("배정할 실사 선택", assign_options, key="insp_assign_select_new")
+            selected_assign = st.selectbox(
+                "배정할 실사 선택",
+                assign_options,
+                key="insp_assign_select_new"
+            )
             assign_idx = int(selected_assign.split("|")[0].strip())
             assign_row = df.loc[df["row_id"] == assign_idx].iloc[0]
 
@@ -1876,15 +1865,33 @@ def inspection_page():
 
             with st.form(f"inspection_assign_form_{assign_idx}"):
                 a1, a2, a3 = st.columns(3)
-                inspector = a1.text_input("실사담당자", value=str(assign_row["실사담당자"]))
-                inspect_date = a2.date_input("실사예정일", value=default_assign_date)
+
+                inspector = a1.text_input(
+                    "실사담당자",
+                    value=str(assign_row["실사담당자"])
+                )
+
+                inspect_date = a2.date_input(
+                    "실사예정일",
+                    value=default_assign_date
+                )
+
+                current_status = str(assign_row["진행상태"]).strip()
+                default_status_index = (
+                    INSPECTION_STATUS_OPTIONS.index(current_status)
+                    if current_status in INSPECTION_STATUS_OPTIONS
+                    else 0
+                )
+
                 inspect_status = a3.selectbox(
                     "진행상태",
                     INSPECTION_STATUS_OPTIONS,
-                    index=INSPECTION_STATUS_OPTIONS.index(assign_row["진행상태"]) if assign_row["진행상태"] in INSPECTION_STATUS_OPTIONS else 0
+                    index=default_status_index
                 )
 
-                assign_submit = st.form_submit_button("배정 / 일정 저장")
+                b1, b2 = st.columns(2)
+                assign_submit = b1.form_submit_button("배정 / 일정 저장")
+                delete_submit = b2.form_submit_button("담당자 배정 삭제")
 
                 if assign_submit:
                     save_df = df[INSPECTION_COLUMNS].copy()
@@ -1892,8 +1899,20 @@ def inspection_page():
                     save_df.loc[assign_idx, "실사예정일"] = str(inspect_date)
                     save_df.loc[assign_idx, "진행상태"] = inspect_status
                     save_inspection_data(save_df)
+                    st.cache_data.clear()
 
                     set_inspection_flash("담당자 배정 및 일정 저장 완료!", "success")
+                    st.rerun()
+
+                if delete_submit:
+                    save_df = df[INSPECTION_COLUMNS].copy()
+                    save_df.loc[assign_idx, "실사담당자"] = ""
+                    save_df.loc[assign_idx, "실사예정일"] = ""
+                    save_df.loc[assign_idx, "진행상태"] = "요청접수"
+                    save_inspection_data(save_df)
+                    st.cache_data.clear()
+
+                    set_inspection_flash("담당자 배정이 삭제되었습니다.", "success")
                     st.rerun()
 
     st.divider()
