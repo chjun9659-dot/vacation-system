@@ -41,6 +41,9 @@ if "role" not in st.session_state:
 if "menu" not in st.session_state:
     st.session_state.menu = "홈"
 
+if "inspection_form_version" not in st.session_state:
+    st.session_state.inspection_form_version = 0    
+
 
 def logout():
     st.session_state.logged_in = False
@@ -1329,34 +1332,36 @@ def inspection_page():
     st.divider()
 
     with st.expander("📝 1. 실사 요청 등록", expanded=False):
-        with st.form("inspection_request_form_new"):
+        form_ver = st.session_state.inspection_form_version
+
+        with st.form(f"inspection_request_form_new_{form_ver}"):
             c1, c2, c3 = st.columns(3)
-            req_date = c1.date_input("요청일", value=date.today())
-            operator_name = c2.text_input("운영사")
-            site_name = c3.text_input("현장명")
+            req_date = c1.date_input("요청일", value=date.today(), key=f"req_date_{form_ver}")
+            operator_name = c2.text_input("운영사", key=f"operator_name_{form_ver}")
+            site_name = c3.text_input("현장명", key=f"site_name_{form_ver}")
 
             c4, c5, c6 = st.columns(3)
-            site_address = c4.text_input("현장주소")
-            site_phone = c5.text_input("현장연락처")
-            product_type = c6.selectbox("상품구분", PRODUCT_OPTIONS)
+            site_address = c4.text_input("현장주소", key=f"site_address_{form_ver}")
+            site_phone = c5.text_input("현장연락처", key=f"site_phone_{form_ver}")
+            product_type = c6.selectbox("상품구분", PRODUCT_OPTIONS, key=f"product_type_{form_ver}")
 
             c7, c8, c9 = st.columns(3)
-            parking_count = c7.number_input("주차면수", min_value=0, step=1, value=0)
-            new_qty = c8.number_input("신규설치수량", min_value=0, step=1, value=0)
-            installed_qty = c9.number_input("기설치수량", min_value=0, step=1, value=0)
+            parking_count = c7.number_input("주차면수", min_value=0, step=1, value=0, key=f"parking_count_{form_ver}")
+            new_qty = c8.number_input("신규설치수량", min_value=0, step=1, value=0, key=f"new_qty_{form_ver}")
+            installed_qty = c9.number_input("기설치수량", min_value=0, step=1, value=0, key=f"installed_qty_{form_ver}")
 
             c10, c11 = st.columns(2)
-            sales_manager = c10.text_input("영업담당자")
-            sales_phone = c11.text_input("영업담당자 연락처")
+            sales_manager = c10.text_input("영업담당자", key=f"sales_manager_{form_ver}")
+            sales_phone = c11.text_input("영업담당자 연락처", key=f"sales_phone_{form_ver}")
 
-            request_content = st.text_area("요청내용")
-            note = st.text_input("비고")
+            request_content = st.text_area("요청내용", key=f"request_content_{form_ver}")
+            note = st.text_input("비고", key=f"note_{form_ver}")
 
             st.markdown("#### 첨부파일")
             uploaded_file = st.file_uploader(
                 "실사 관련 파일 업로드",
                 type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
-                key="insp_uploaded_file_new"
+                key=f"insp_uploaded_file_new_{form_ver}"
             )
 
             submit_request = st.form_submit_button("실사 요청 등록")
@@ -1416,6 +1421,7 @@ def inspection_page():
                     save_inspection_data(save_df)
 
                     set_inspection_flash("실사 요청이 등록되었습니다.", "success")
+                    st.session_state.inspection_form_version += 1
                     st.rerun()
 
     st.divider()
