@@ -1952,8 +1952,8 @@ def inspection_page():
                 hide_index=True,
                 column_config={
                     "현장명": st.column_config.TextColumn("현장명", width="medium"),
-                    "현장주소": st.column_config.TextColumn("현장주소", width="large"),
-                    "운영사": st.column_config.TextColumn("운영사", width="medium"),
+                    "현장주소": st.column_config.TextColumn("현장주소", width="medium"),
+                    "운영사": st.column_config.TextColumn("운영사", width="small"),,
                     "신규설치수량": st.column_config.NumberColumn("신규설치수량", width="small"),
                     "기설치수량": st.column_config.NumberColumn("기설치수량", width="small"),
                     "주차면수": st.column_config.NumberColumn("주차면수", width="small"),
