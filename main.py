@@ -2176,44 +2176,61 @@ def inspection_page():
             if not is_edit_mode:
                 st.markdown("""
                 <style>
-                .erp-title {
-                    font-size: 20px;
-                    font-weight: 700;
+                .detail-title {
+                    font-size: 22px;
+                    font-weight: 800;
+                    color: #0f172a;
                     margin-bottom: 14px;
                 }
-                .erp-summary-wrap {
+                .detail-summary-wrap {
                     display: grid;
                     grid-template-columns: repeat(4, 1fr);
-                    gap: 10px;
+                    gap: 12px;
                     margin-bottom: 18px;
                 }
-                .erp-summary-card {
+                .detail-summary-card {
                     border: 1px solid #e5e7eb;
-                    border-radius: 10px;
-                    padding: 12px 14px;
-                    background: #ffffff;
+                    border-radius: 14px;
+                    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+                    padding: 14px 16px;
+                    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
                 }
-                .erp-summary-label {
+                .detail-summary-label {
                     font-size: 12px;
-                    color: #6b7280;
-                    margin-bottom: 6px;
+                    color: #64748b;
+                    margin-bottom: 8px;
                 }
-                .erp-summary-value {
+                .detail-summary-value {
                     font-size: 20px;
-                    font-weight: 600;
-                    color: #111827;
-                    line-height: 1.2;
+                    font-weight: 700;
+                    color: #0f172a;
+                    line-height: 1.25;
                 }
-                .erp-label {
+                .detail-section {
+                    margin-top: 10px;
+                    margin-bottom: 14px;
+                    padding: 14px;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 14px;
+                    background: #ffffff;
+                    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+                }
+                .detail-section-title {
+                    font-size: 16px;
+                    font-weight: 800;
+                    color: #0f172a;
+                    margin-bottom: 12px;
+                }
+                .detail-label {
                     font-size: 13px;
-                    font-weight: 600;
-                    color: #374151;
+                    font-weight: 700;
+                    color: #334155;
                     margin-bottom: 6px;
                 }
-                .erp-box {
+                .detail-box {
                     border: 1px solid #dbe3ee;
-                    border-radius: 10px;
-                    background: #eef5ff;
+                    border-radius: 12px;
+                    background: #f8fbff;
                     padding: 12px 14px;
                     min-height: 46px;
                     font-size: 14px;
@@ -2221,140 +2238,204 @@ def inspection_page():
                     display: flex;
                     align-items: center;
                 }
-                .erp-textarea {
+                .detail-textarea {
                     border: 1px solid #e5e7eb;
-                    border-radius: 10px;
-                    background: #f9fafb;
+                    border-radius: 12px;
+                    background: #f8fafc;
                     padding: 14px;
                     white-space: pre-wrap;
-                    line-height: 1.6;
+                    line-height: 1.7;
                     font-size: 14px;
                     color: #111827;
-                }
-                .erp-section-space {
-                    margin-top: 10px;
-                    margin-bottom: 10px;
+                    min-height: 72px;
                 }
                 </style>
                 """, unsafe_allow_html=True)
 
-                st.markdown('<div class="erp-title">📄 상세보기</div>', unsafe_allow_html=True)
+                st.markdown('<div class="detail-title">📄 실사 상세보기</div>', unsafe_allow_html=True)
 
                 st.markdown(
                     f"""
-                    <div class="erp-summary-wrap">
-                        <div class="erp-summary-card">
-                            <div class="erp-summary-label">진행상태</div>
-                            <div class="erp-summary-value">{str(view_row["진행상태"])}</div>
+                    <div class="detail-summary-wrap">
+                        <div class="detail-summary-card">
+                            <div class="detail-summary-label">진행상태</div>
+                            <div class="detail-summary-value">{str(view_row["진행상태"]).strip() or "-"}</div>
                         </div>
-                        <div class="erp-summary-card">
-                            <div class="erp-summary-label">계약여부</div>
-                            <div class="erp-summary-value">{str(view_row["계약여부"])}</div>
+                        <div class="detail-summary-card">
+                            <div class="detail-summary-label">계약여부</div>
+                            <div class="detail-summary-value">{str(view_row["계약여부"]).strip() or "-"}</div>
                         </div>
-                        <div class="erp-summary-card">
-                            <div class="erp-summary-label">상품구분</div>
-                            <div class="erp-summary-value">{str(view_row["상품구분"])}</div>
+                        <div class="detail-summary-card">
+                            <div class="detail-summary-label">상품구분</div>
+                            <div class="detail-summary-value">{str(view_row["상품구분"]).strip() or "-"}</div>
                         </div>
-                        <div class="erp-summary-card">
-                            <div class="erp-summary-label">영업담당자</div>
-                            <div class="erp-summary-value">{str(view_row["영업담당자"])}</div>
+                        <div class="detail-summary-card">
+                            <div class="detail-summary-label">영업담당자</div>
+                            <div class="detail-summary-value">{str(view_row["영업담당자"]).strip() or "-"}</div>
                         </div>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
-                st.markdown("---")
+                # 1. 기본 정보
+                st.markdown('<div class="detail-section">', unsafe_allow_html=True)
+                st.markdown('<div class="detail-section-title">기본 정보</div>', unsafe_allow_html=True)
 
-                a1, a2, a3 = st.columns(3)
-                with a1:
-                    st.markdown('<div class="erp-label">요청일</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["요청일"])}</div>', unsafe_allow_html=True)
-                with a2:
-                    st.markdown('<div class="erp-label">운영사</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["운영사"])}</div>', unsafe_allow_html=True)
-                with a3:
-                    st.markdown('<div class="erp-label">현장명</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["현장명"])}</div>', unsafe_allow_html=True)
+                row1_col1, row1_col2, row1_col3 = st.columns(3)
+                with row1_col1:
+                    st.markdown('<div class="detail-label">요청일</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["요청일"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row1_col2:
+                    st.markdown('<div class="detail-label">운영사</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["운영사"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row1_col3:
+                    st.markdown('<div class="detail-label">현장명</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["현장명"]).strip() or "-"}</div>', unsafe_allow_html=True)
 
-                b1, b2, b3 = st.columns(3)
-                with b1:
-                    st.markdown('<div class="erp-label">현장주소</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["현장주소"])}</div>', unsafe_allow_html=True)
-                with b2:
-                    st.markdown('<div class="erp-label">현장연락처</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["현장연락처"])}</div>', unsafe_allow_html=True)
-                with b3:
-                    st.markdown('<div class="erp-label">상품구분</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["상품구분"])}</div>', unsafe_allow_html=True)
+                row2_col1, row2_col2, row2_col3 = st.columns(3)
+                with row2_col1:
+                    st.markdown('<div class="detail-label">현장주소</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["현장주소"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row2_col2:
+                    st.markdown('<div class="detail-label">현장연락처</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["현장연락처"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row2_col3:
+                    st.markdown('<div class="detail-label">상품구분</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["상품구분"]).strip() or "-"}</div>', unsafe_allow_html=True)
 
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.markdown('<div class="erp-label">주차면수</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["주차면수"])}</div>', unsafe_allow_html=True)
-                with c2:
-                    st.markdown('<div class="erp-label">신규설치수량</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["신규설치수량"])}</div>', unsafe_allow_html=True)
-                with c3:
-                    st.markdown('<div class="erp-label">기설치수량</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["기설치수량"])}</div>', unsafe_allow_html=True)
+                row3_col1, row3_col2, row3_col3 = st.columns(3)
+                with row3_col1:
+                    st.markdown('<div class="detail-label">환경부</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["환경부"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row3_col2:
+                    st.markdown('<div class="detail-label">자투</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["자투"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row3_col3:
+                    st.markdown('<div class="detail-label">주차면수</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["주차면수"]).strip() or "0"}</div>', unsafe_allow_html=True)
 
-                d1, d2 = st.columns(2)
-                with d1:
-                    st.markdown('<div class="erp-label">영업담당자</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["영업담당자"])}</div>', unsafe_allow_html=True)
-                with d2:
-                    st.markdown('<div class="erp-label">영업담당자 연락처</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="erp-box">{str(view_row["영업담당연락처"])}</div>', unsafe_allow_html=True)
+                row4_col1, row4_col2, row4_col3 = st.columns(3)
+                with row4_col1:
+                    st.markdown('<div class="detail-label">신규설치수량</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["신규설치수량"]).strip() or "0"}</div>', unsafe_allow_html=True)
+                with row4_col2:
+                    st.markdown('<div class="detail-label">기설치수량</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["기설치수량"]).strip() or "0"}</div>', unsafe_allow_html=True)
+                with row4_col3:
+                    st.markdown('<div class="detail-label">실사담당자</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["실사담당자"]).strip() or "-"}</div>', unsafe_allow_html=True)
 
-                st.markdown('<div class="erp-section-space"></div>', unsafe_allow_html=True)
+                row5_col1, row5_col2, row5_col3 = st.columns(3)
+                with row5_col1:
+                    st.markdown('<div class="detail-label">영업담당자</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["영업담당자"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row5_col2:
+                    st.markdown('<div class="detail-label">영업담당자 연락처</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["영업담당연락처"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row5_col3:
+                    st.markdown('<div class="detail-label">실사예정일</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["실사예정일"]).strip() or "-"}</div>', unsafe_allow_html=True)
 
-                st.markdown('<div class="erp-label">요청내용</div>', unsafe_allow_html=True)
+                row6_col1, row6_col2, row6_col3 = st.columns(3)
+                with row6_col1:
+                    st.markdown('<div class="detail-label">실사완료일</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["실사완료일"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row6_col2:
+                    st.markdown('<div class="detail-label">계약일</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["계약일"]).strip() or "-"}</div>', unsafe_allow_html=True)
+                with row6_col3:
+                    st.markdown('<div class="detail-label">계약수량</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["계약수량"]).strip() or "0"}</div>', unsafe_allow_html=True)
+
+                row7_col1, row7_col2 = st.columns(2)
+                with row7_col1:
+                    st.markdown('<div class="detail-label">계약금액</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["계약금액"]).strip() or "0"}</div>', unsafe_allow_html=True)
+                with row7_col2:
+                    st.markdown('<div class="detail-label">미계약사유</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="detail-box">{str(view_row["미계약사유"]).strip() or "-"}</div>', unsafe_allow_html=True)
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # 2. 내용 정보
+                st.markdown('<div class="detail-section">', unsafe_allow_html=True)
+                st.markdown('<div class="detail-section-title">내용 정보</div>', unsafe_allow_html=True)
+
+                st.markdown('<div class="detail-label">요청내용</div>', unsafe_allow_html=True)
                 request_text = str(view_row["요청내용"]).strip()
-                if request_text:
-                    st.markdown(
-                        f'<div class="erp-textarea">{request_text}</div>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown('<div class="erp-box">요청내용이 없습니다.</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="detail-textarea">{request_text if request_text else "요청내용이 없습니다."}</div>',
+                    unsafe_allow_html=True
+                )
 
-                st.markdown('<div class="erp-section-space"></div>', unsafe_allow_html=True)
+                st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
 
-                st.markdown('<div class="erp-label">비고</div>', unsafe_allow_html=True)
+                st.markdown('<div class="detail-label">비고</div>', unsafe_allow_html=True)
                 note_text = str(view_row["비고"]).strip()
-                if note_text:
-                    st.markdown(
-                        f'<div class="erp-textarea">{note_text}</div>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown('<div class="erp-box">비고가 없습니다.</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="detail-textarea">{note_text if note_text else "비고가 없습니다."}</div>',
+                    unsafe_allow_html=True
+                )
 
-                st.markdown('<div class="erp-section-space"></div>', unsafe_allow_html=True)
+                st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
 
-                st.markdown('<div class="erp-label">첨부파일</div>', unsafe_allow_html=True)
+                st.markdown('<div class="detail-label">실사결과</div>', unsafe_allow_html=True)
+                result_text = str(view_row["실사결과"]).strip()
+                st.markdown(
+                    f'<div class="detail-textarea">{result_text if result_text else "실사결과가 없습니다."}</div>',
+                    unsafe_allow_html=True
+                )
+
+                st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+
+                st.markdown('<div class="detail-label">특이사항</div>', unsafe_allow_html=True)
+                special_text = str(view_row["특이사항"]).strip()
+                st.markdown(
+                    f'<div class="detail-textarea">{special_text if special_text else "특이사항이 없습니다."}</div>',
+                    unsafe_allow_html=True
+                )
+
+                st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+
+                st.markdown('<div class="detail-label">후속조치</div>', unsafe_allow_html=True)
+                follow_text = str(view_row["후속조치"]).strip()
+                st.markdown(
+                    f'<div class="detail-textarea">{follow_text if follow_text else "후속조치가 없습니다."}</div>',
+                    unsafe_allow_html=True
+                )
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # 3. 첨부파일
+                st.markdown('<div class="detail-section">', unsafe_allow_html=True)
+                st.markdown('<div class="detail-section-title">첨부파일</div>', unsafe_allow_html=True)
+
                 if str(view_row["첨부파일링크"]).strip():
                     file_name = str(view_row["첨부파일명"]).strip() or "첨부파일 열기"
                     st.link_button(file_name, str(view_row["첨부파일링크"]))
                 else:
-                    st.markdown('<div class="erp-box">첨부파일이 없습니다.</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="detail-box">첨부파일이 없습니다.</div>', unsafe_allow_html=True)
+
+                st.markdown('</div>', unsafe_allow_html=True)
 
                 st.markdown("---")
 
                 if st.button("수정", use_container_width=True, key=f"insp_edit_mode_btn_{view_idx}"):
                     st.session_state.inspection_edit_mode = True
                     st.session_state.inspection_edit_target = view_idx
-                    st.rerun()
+                    st.rerun()   
 
             else:
-                st.markdown("## ✏️ 수정 모드")
+
+                st.markdown("### 📌 기본 정보 수정")
 
                 req_date_raw = str(view_row["요청일"]).strip()
                 parsed_req_date = pd.to_datetime(req_date_raw, errors="coerce")
                 default_req_date = parsed_req_date.date() if pd.notna(parsed_req_date) else date.today()
 
                 with st.form(f"inspection_edit_form_{view_idx}"):
+
                     e1, e2, e3 = st.columns(3)
                     edit_req_date = e1.date_input("요청일 수정", value=default_req_date)
                     edit_operator = e2.text_input("운영사 수정", value=str(view_row["운영사"]))
@@ -2366,31 +2447,18 @@ def inspection_page():
                     edit_product = e6.selectbox(
                         "상품구분 수정",
                         PRODUCT_OPTIONS,
-                         index=PRODUCT_OPTIONS.index(view_row["상품구분"]) if view_row["상품구분"] in PRODUCT_OPTIONS else 0
+                        index=PRODUCT_OPTIONS.index(view_row["상품구분"]) if view_row["상품구분"] in PRODUCT_OPTIONS else 0
                     )
 
-                        # 환경부 / 자투 (상품구분 아래)
                     e6_1, e6_2 = st.columns(2)
-
                     current_env = str(view_row["환경부"]).strip() if "환경부" in view_row.index else ""
                     current_jatu = str(view_row["자투"]).strip() if "자투" in view_row.index else ""
 
                     env_index = ENV_OPTIONS.index(current_env) if current_env in ENV_OPTIONS else 0
                     jatu_index = JATU_OPTIONS.index(current_jatu) if current_jatu in JATU_OPTIONS else 0
 
-                    env_gov = e6_1.selectbox(
-                        "환경부 수정",
-                        ENV_OPTIONS,
-                        index=env_index,
-                        key=f"edit_env_{view_idx}"
-                    )
-
-                    jatu = e6_2.selectbox(
-                        "자투 수정",
-                        JATU_OPTIONS,
-                        index=jatu_index,
-                        key=f"edit_jatu_{view_idx}"
-                    )
+                    env_gov = e6_1.selectbox("환경부 수정", ENV_OPTIONS, index=env_index, key=f"edit_env_{view_idx}")
+                    jatu = e6_2.selectbox("자투 수정", JATU_OPTIONS, index=jatu_index, key=f"edit_jatu_{view_idx}")
 
                     e7, e8, e9 = st.columns(3)
                     edit_parking = e7.number_input("주차면수 수정", min_value=0, step=1, value=safe_int(view_row["주차면수"], 0))
@@ -2403,6 +2471,7 @@ def inspection_page():
 
                     edit_request = st.text_area("요청내용 수정", value=str(view_row["요청내용"]))
                     edit_note = st.text_input("비고 수정", value=str(view_row["비고"]))
+
                     st.markdown("#### 첨부파일 수정")
                     edit_uploaded_file = st.file_uploader(
                         "새 첨부파일 업로드",
@@ -2436,15 +2505,9 @@ def inspection_page():
                         save_df.loc[view_idx, "영업담당연락처"] = edit_sales_phone.strip()
                         save_df.loc[view_idx, "요청내용"] = edit_request.strip()
                         save_df.loc[view_idx, "비고"] = edit_note.strip()
+                        save_df.loc[view_idx, "환경부"] = env_gov
+                        save_df.loc[view_idx, "자투"] = jatu
 
-                        # 환경부 / 자투 추가하셨다면 같이 저장
-                        if "환경부" in save_df.columns:
-                            save_df.loc[view_idx, "환경부"] = env_gov if 'env_gov' in locals() else str(view_row.get("환경부", "")).strip()
-
-                        if "자투" in save_df.columns:
-                            save_df.loc[view_idx, "자투"] = jatu if 'jatu' in locals() else str(view_row.get("자투", "")).strip()
-
-                        # 새 첨부파일 업로드 시 덮어쓰기
                         if edit_uploaded_file is not None:
                             try:
                                 new_attachment_name, new_attachment_link = upload_file_to_drive(
@@ -2462,6 +2525,11 @@ def inspection_page():
                         st.session_state.inspection_edit_mode = False
                         st.session_state.inspection_edit_target = None
                         set_inspection_flash("기본 정보 수정 완료!", "success")
+                        st.rerun()
+
+                    if cancel_submit:
+                        st.session_state.inspection_edit_mode = False
+                        st.session_state.inspection_edit_target = None
                         st.rerun()
 
     st.divider()
