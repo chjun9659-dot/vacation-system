@@ -1015,7 +1015,6 @@ def save_vacation_data(df):
     rows = [save_df.columns.tolist()] + save_df.values.tolist()
 
     # ❌ clear 제거
-    # sheet.clear()
 
     # ✅ 안전 방식
     sheet.update("A1", rows)
@@ -1085,7 +1084,6 @@ def save_schedule_data(df, sheet=None):
     save_df["수량"] = pd.to_numeric(save_df["수량"], errors="coerce").fillna(0).astype(int)
 
     rows = [save_df.columns.tolist()] + save_df.astype(str).values.tolist()
-    sheet.clear()
     sheet.update(rows)
 
 
@@ -1528,11 +1526,24 @@ def save_inspection_data(df, sheet=None):
     if sheet is None:
         sheet = get_inspection_sheet()
 
-    save_df = normalize_inspection_df(df)
-    rows = [save_df.columns.tolist()] + save_df.astype(str).values.tolist()
-    sheet.clear()
-    sheet.update(rows)
-    st.cache_data.clear()
+    save_df = normalize_inspection_df(df).copy()
+
+    # None / nan / Timestamp 안전 변환
+    save_df = save_df.fillna("")
+    for col in save_df.columns:
+        save_df[col] = save_df[col].apply(lambda x: "" if pd.isna(x) else str(x))
+
+    rows = [save_df.columns.tolist()] + save_df.values.tolist()
+
+    try:
+        # 먼저 A1부터 덮어쓰기
+        sheet.update("A1", rows, value_input_option="USER_ENTERED")
+
+        # 저장 성공 후 캐시 삭제
+        st.cache_data.clear()
+
+    except Exception as e:
+        raise Exception(f"실사 시트 저장 실패: {e}")
 
 def render_inspection_common_style():
     st.markdown("""
@@ -2334,7 +2345,30 @@ def inspection_page():
                     edit_product = e6.selectbox(
                         "상품구분 수정",
                         PRODUCT_OPTIONS,
-                        index=PRODUCT_OPTIONS.index(view_row["상품구분"]) if view_row["상품구분"] in PRODUCT_OPTIONS else 0
+                         index=PRODUCT_OPTIONS.index(view_row["상품구분"]) if view_row["상품구분"] in PRODUCT_OPTIONS else 0
+                    )
+
+                        # 환경부 / 자투 (상품구분 아래)
+                    e6_1, e6_2 = st.columns(2)
+
+                    current_env = str(view_row["환경부"]).strip() if "환경부" in view_row.index else ""
+                    current_jatu = str(view_row["자투"]).strip() if "자투" in view_row.index else ""
+
+                    env_index = ENV_OPTIONS.index(current_env) if current_env in ENV_OPTIONS else 0
+                    jatu_index = JATU_OPTIONS.index(current_jatu) if current_jatu in JATU_OPTIONS else 0
+
+                    env_gov = e6_1.selectbox(
+                        "환경부 수정",
+                        ENV_OPTIONS,
+                        index=env_index,
+                        key=f"edit_env_{view_idx}"
+                    )
+
+                    jatu = e6_2.selectbox(
+                        "자투 수정",
+                        JATU_OPTIONS,
+                        index=jatu_index,
+                        key=f"edit_jatu_{view_idx}"
                     )
 
                     e7, e8, e9 = st.columns(3)
@@ -2348,6 +2382,18 @@ def inspection_page():
 
                     edit_request = st.text_area("요청내용 수정", value=str(view_row["요청내용"]))
                     edit_note = st.text_input("비고 수정", value=str(view_row["비고"]))
+                    st.markdown("#### 첨부파일 수정")
+                    edit_uploaded_file = st.file_uploader(
+                        "새 첨부파일 업로드",
+                        type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
+                        key=f"insp_edit_uploaded_file_{view_idx}"
+                    )
+
+                    current_file_name = str(view_row["첨부파일명"]).strip()
+                    current_file_link = str(view_row["첨부파일링크"]).strip()
+
+                    if current_file_link:
+                        st.caption(f"현재 첨부파일: {current_file_name if current_file_name else '첨부파일'}")
 
                     s1, s2 = st.columns(2)
                     save_submit = s1.form_submit_button("기본 정보 수정 저장", use_container_width=True)
@@ -2355,39 +2401,46 @@ def inspection_page():
 
                     if save_submit:
                         save_df = df[INSPECTION_COLUMNS].copy()
-                        save_df = normalize_inspection_df(save_df)
 
                         save_df.loc[view_idx, "요청일"] = str(edit_req_date)
-                        save_df.loc[view_idx, "운영사"] = str(edit_operator).strip()
-                        save_df.loc[view_idx, "현장명"] = str(edit_name).strip()
-                        save_df.loc[view_idx, "현장주소"] = str(edit_addr).strip()
-                        save_df.loc[view_idx, "현장연락처"] = str(edit_phone).strip()
-                        save_df.loc[view_idx, "상품구분"] = str(edit_product).strip()
+                        save_df.loc[view_idx, "운영사"] = edit_operator.strip()
+                        save_df.loc[view_idx, "현장명"] = edit_name.strip()
+                        save_df.loc[view_idx, "현장주소"] = edit_addr.strip()
+                        save_df.loc[view_idx, "현장연락처"] = edit_phone.strip()
+                        save_df.loc[view_idx, "상품구분"] = edit_product
+                        save_df.loc[view_idx, "주차면수"] = int(edit_parking)
+                        save_df.loc[view_idx, "신규설치수량"] = int(edit_new_qty)
+                        save_df.loc[view_idx, "기설치수량"] = int(edit_old_qty)
+                        save_df.loc[view_idx, "영업담당자"] = edit_sales.strip()
+                        save_df.loc[view_idx, "영업담당연락처"] = edit_sales_phone.strip()
+                        save_df.loc[view_idx, "요청내용"] = edit_request.strip()
+                        save_df.loc[view_idx, "비고"] = edit_note.strip()
 
-                        save_df.loc[view_idx, "주차면수"] = safe_int(edit_parking, 0)
-                        save_df.loc[view_idx, "신규설치수량"] = safe_int(edit_new_qty, 0)
-                        save_df.loc[view_idx, "기설치수량"] = safe_int(edit_old_qty, 0)
+                        # 환경부 / 자투 추가하셨다면 같이 저장
+                        if "환경부" in save_df.columns:
+                            save_df.loc[view_idx, "환경부"] = env_gov if 'env_gov' in locals() else str(view_row.get("환경부", "")).strip()
 
-                        save_df.loc[view_idx, "영업담당자"] = str(edit_sales).strip()
-                        save_df.loc[view_idx, "영업담당연락처"] = str(edit_sales_phone).strip()
-                        save_df.loc[view_idx, "요청내용"] = str(edit_request).strip()
-                        save_df.loc[view_idx, "비고"] = str(edit_note).strip()
+                        if "자투" in save_df.columns:
+                            save_df.loc[view_idx, "자투"] = jatu if 'jatu' in locals() else str(view_row.get("자투", "")).strip()
+
+                        # 새 첨부파일 업로드 시 덮어쓰기
+                        if edit_uploaded_file is not None:
+                            try:
+                                new_attachment_name, new_attachment_link = upload_file_to_drive(
+                                    edit_uploaded_file,
+                                    folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
+                                )
+                                save_df.loc[view_idx, "첨부파일명"] = new_attachment_name
+                                save_df.loc[view_idx, "첨부파일링크"] = new_attachment_link
+                            except Exception as e:
+                                st.error(f"첨부파일 업로드 실패: {e}")
+                                st.stop()
 
                         save_inspection_data(save_df)
 
                         st.session_state.inspection_edit_mode = False
                         st.session_state.inspection_edit_target = None
                         set_inspection_flash("기본 정보 수정 완료!", "success")
-                        st.rerun()
-
-                        st.session_state.inspection_edit_mode = False
-                        st.session_state.inspection_edit_target = None
-                        set_inspection_flash("기본 정보 수정 완료!", "success")
-                        st.rerun()
-
-                    if cancel_submit:
-                        st.session_state.inspection_edit_mode = False
-                        st.session_state.inspection_edit_target = None
                         st.rerun()
 
     st.divider()
