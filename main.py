@@ -1344,6 +1344,8 @@ INSPECTION_COLUMNS = [
     "현장연락처",
     "주차면수",
     "상품구분",
+    "환경부"
+    "자투"
     "신규설치수량",
     "기설치수량",
     "영업담당자",
@@ -1724,6 +1726,8 @@ def inspection_page():
             site_address = c4.text_input("현장주소", key=f"site_address_{form_ver}")
             site_phone = c5.text_input("현장연락처", key=f"site_phone_{form_ver}")
             product_type = c6.selectbox("상품구분", PRODUCT_OPTIONS, key=f"product_type_{form_ver}")
+            env_gov = st.selectbox("환경부", ["", "대상", "비대상"], key=f"env_{form_ver}")
+            jatu = st.selectbox("자투", ["", "있음", "없음"], key=f"jatu_{form_ver}")
 
             c7, c8, c9 = st.columns(3)
             parking_count = c7.number_input("주차면수", min_value=0, step=1, value=0, key=f"parking_count_{form_ver}")
@@ -1774,6 +1778,8 @@ def inspection_page():
                         "현장연락처": site_phone.strip(),
                         "주차면수": int(parking_count),
                         "상품구분": product_type,
+                        "환경부": env_gov,
+                        "자투": jatu,
                         "신규설치수량": int(new_qty),
                         "기설치수량": int(installed_qty),
                         "영업담당자": sales_manager.strip(),
@@ -1844,6 +1850,8 @@ def inspection_page():
         show_df = filtered_df[[
             "요청일",
             "상품구분",
+            "환경부",
+            "자투",
             "현장명",
             "현장주소",
             "현장연락처",
