@@ -13,6 +13,18 @@ import io
 import pickle
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+import platform
+
+if platform.system() == "Windows":
+    plt.rc("font", family="Malgun Gothic")
+elif platform.system() == "Darwin":
+    plt.rc("font", family="AppleGothic")
+else:
+    plt.rc("font", family="NanumGothic")
+
+plt.rcParams["axes.unicode_minus"] = False
 
 # 👉 여기에 넣으세요
 DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -84,7 +96,7 @@ def login_screen():
 # 1. 공통 UI
 # =========================================================
 def draw_sidebar():
-    menu_list = ["홈", "연차 관리", "시공 일정", "실사 관리"]
+    menu_list = ["홈", "통계 대시보드", "연차 관리", "시공 일정", "실사 관리"]
 
     with st.sidebar:
         st.markdown(f"### 👤 {st.session_state.username}")
@@ -112,10 +124,11 @@ def draw_sidebar():
 def home_page():
     if st.session_state.menu != "홈":
         return
+
     st.markdown("""
     <style>
     .home-title {
-        font-size: 28px;
+        font-size: 20px;
         font-weight: 800;
         color: #0f172a;
         margin-bottom: 6px;
@@ -153,21 +166,25 @@ def home_page():
     st.markdown('<div class="home-title">🏢 윤우 통합 운영 시스템</div>', unsafe_allow_html=True)
     st.markdown('<div class="home-desc">회사용 내부 운영 시스템입니다.</div>', unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns(3)
-
+    c1, c2 = st.columns(2)
     with c1:
+        if st.button("📈 통계 대시보드", use_container_width=True, key="home_btn_dashboard"):
+            st.session_state.menu = "통계 대시보드"
+            st.rerun()
+            return
+    with c2:
         if st.button("📊 연차 관리", use_container_width=True, key="home_btn_vacation"):
             st.session_state.menu = "연차 관리"
             st.rerun()
             return
 
-    with c2:
+    c3, c4 = st.columns(2)
+    with c3:
         if st.button("📅 시공 일정", use_container_width=True, key="home_btn_schedule"):
             st.session_state.menu = "시공 일정"
             st.rerun()
             return
-
-    with c3:
+    with c4:
         if st.button("🔎 실사 관리", use_container_width=True, key="home_btn_inspection"):
             st.session_state.menu = "실사 관리"
             st.rerun()
@@ -180,7 +197,7 @@ def home_page():
     <div class="home-guide-box">
     • 좌측 메뉴에서 원하는 시스템을 선택하세요.<br>
     • 메인 화면 버튼을 눌러도 각 시스템으로 바로 이동할 수 있습니다.<br>
-    • 현재는 하나의 앱에서 연차 / 시공일정 / 실사관리를 함께 사용할 수 있습니다.
+    • 이제 통계 대시보드에서 실사 / 시공 / 연차 현황을 한 번에 볼 수 있습니다.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1076,6 +1093,7 @@ def save_schedule_data(df, sheet=None):
         sheet = get_schedule_sheet()
 
     save_df = df.copy()
+
     for col in EXPECTED_COLUMNS:
         if col not in save_df.columns:
             save_df[col] = ""
@@ -1083,8 +1101,29 @@ def save_schedule_data(df, sheet=None):
     save_df = save_df[EXPECTED_COLUMNS].fillna("")
     save_df["수량"] = pd.to_numeric(save_df["수량"], errors="coerce").fillna(0).astype(int)
 
+    # 기존 시트 데이터 길이 확인
+    old_values = sheet.get_all_values()
+    old_data_rows = max(0, len(old_values) - 1)  # 헤더 제외
+
+    # 새로 저장할 데이터
     rows = [save_df.columns.tolist()] + save_df.astype(str).values.tolist()
-    sheet.update(rows)
+
+    # 1) 새 데이터 저장
+    sheet.update("A1", rows)
+
+    # 2) 예전 데이터가 더 길었다면 남는 행 비우기
+    new_data_rows = len(save_df)
+
+    if old_data_rows > new_data_rows:
+        blank_rows = old_data_rows - new_data_rows
+        start_row = new_data_rows + 2   # 헤더가 1행이므로 실제 데이터 시작 보정
+        end_row = old_data_rows + 1
+
+        clear_range = f"A{start_row}:G{end_row}"
+        empty_values = [[""] * len(EXPECTED_COLUMNS) for _ in range(blank_rows)]
+        sheet.update(clear_range, empty_values)
+
+    st.cache_data.clear()
 
 
 def schedule_page():
@@ -1672,6 +1711,291 @@ def render_inspection_common_style():
     }
     </style>
     """, unsafe_allow_html=True)
+
+def dashboard_page():
+    if st.session_state.menu != "통계 대시보드":
+        return
+
+
+    st.markdown('<div class="erp-page-title">📈 통계 대시보드</div>', unsafe_allow_html=True)
+    st.markdown('<div class="erp-page-desc">실사 / 시공 / 연차 데이터를 한 화면에서 확인합니다.</div>', unsafe_allow_html=True)
+
+    # -------------------------------------------------
+    # 데이터 로드
+    # -------------------------------------------------
+    try:
+        insp_df = load_inspection_data()
+        insp_df = normalize_inspection_df(insp_df)
+    except Exception as e:
+        st.error(f"실사 데이터 로드 실패: {e}")
+        insp_df = pd.DataFrame(columns=INSPECTION_COLUMNS)
+
+    try:
+        sch_df = load_schedule_data()
+    except Exception as e:
+        st.error(f"시공 데이터 로드 실패: {e}")
+        sch_df = pd.DataFrame(columns=EXPECTED_COLUMNS)
+
+    try:
+        vac_df = load_vacation_data()
+    except Exception as e:
+        st.error(f"연차 데이터 로드 실패: {e}")
+        vac_df = pd.DataFrame()
+
+    # -------------------------------------------------
+    # 공통 안전 처리
+    # -------------------------------------------------
+    if not insp_df.empty:
+        insp_df["요청일_dt"] = pd.to_datetime(insp_df["요청일"], errors="coerce")
+        insp_df["계약일_dt"] = pd.to_datetime(insp_df["계약일"], errors="coerce")
+        insp_df["실사완료일_dt"] = pd.to_datetime(insp_df["실사완료일"], errors="coerce")
+
+    if not sch_df.empty:
+        sch_df["날짜_dt"] = pd.to_datetime(sch_df["날짜"], errors="coerce")
+        sch_df["완료일_dt"] = pd.to_datetime(sch_df["완료일"], errors="coerce")
+
+    if not vac_df.empty:
+        for col in ["발생 연차", "사용 연차", "잔여 연차"]:
+            if col in vac_df.columns:
+                vac_df[col] = pd.to_numeric(vac_df[col], errors="coerce").fillna(0)
+
+    # -------------------------------------------------
+    # 상단 요약 카드
+    # -------------------------------------------------
+    total_requests = len(insp_df)
+    total_contracts = len(insp_df[insp_df["계약여부"] == "계약"]) if not insp_df.empty else 0
+    total_completed_inspection = len(insp_df[insp_df["진행상태"] == "실사완료"]) if not insp_df.empty else 0
+
+    conversion_all = round((total_contracts / total_requests) * 100, 1) if total_requests > 0 else 0.0
+    conversion_done = round((total_contracts / total_completed_inspection) * 100, 1) if total_completed_inspection > 0 else 0.0
+
+    total_schedule = len(sch_df)
+    total_schedule_done = len(sch_df[sch_df["상태"] == "완료"]) if not sch_df.empty else 0
+    total_schedule_qty = int(pd.to_numeric(sch_df["수량"], errors="coerce").fillna(0).sum()) if not sch_df.empty else 0
+
+    total_staff = len(vac_df) if not vac_df.empty else 0
+    total_used_leave = float(vac_df["사용 연차"].sum()) if not vac_df.empty and "사용 연차" in vac_df.columns else 0.0
+    total_remain_leave = float(vac_df["잔여 연차"].sum()) if not vac_df.empty and "잔여 연차" in vac_df.columns else 0.0
+
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("전체 실사요청", total_requests)
+    c2.metric("계약완료", total_contracts)
+    c3.metric("전체 계약률", f"{conversion_all}%")
+    c4.metric("실사완료 대비 계약률", f"{conversion_done}%")
+    c5.metric("전체 시공일정", total_schedule)
+    c6.metric("전체 직원 수", total_staff)
+
+    st.divider()
+
+    # -------------------------------------------------
+    # 1. 실사 통계
+    # -------------------------------------------------
+    st.markdown("### 🔎 실사 통계")
+
+    if insp_df.empty:
+        st.info("실사 데이터가 없습니다.")
+    else:
+        i1, i2, i3, i4 = st.columns(4)
+        i1.metric("요청접수", len(insp_df[insp_df["진행상태"] == "요청접수"]))
+        i2.metric("진행중", len(insp_df[insp_df["진행상태"].isin(["담당자배정", "일정확정", "실사진행"])]))
+        i3.metric("실사완료", len(insp_df[insp_df["진행상태"] == "실사완료"]))
+        i4.metric("미계약종결", len(insp_df[insp_df["진행상태"] == "미계약종결"]))
+
+        chart_col1, chart_col2 = st.columns(2)
+
+        with chart_col1:
+            status_counts = insp_df["진행상태"].value_counts().sort_values(ascending=False)
+            if not status_counts.empty:
+                fig, ax = plt.subplots(figsize=(4, 2.5))
+                status_counts.plot(kind="bar", ax=ax)
+                ax.set_title("실사 진행상태별 건수")
+                ax.set_xlabel("진행상태")
+                ax.set_ylabel("건수")
+                
+
+        with chart_col2:
+            contract_counts = insp_df["계약여부"].replace("", "대기").value_counts().sort_values(ascending=False)
+            if not contract_counts.empty:
+                fig, ax = plt.subplots(figsize=(4, 2.5))
+                contract_counts.plot(kind="bar", ax=ax)
+                ax.set_title("계약여부별 건수")
+                ax.set_xlabel("계약여부")
+                ax.set_ylabel("건수")
+               
+
+        st.markdown("#### 담당자별 실적")
+
+        dcol1, dcol2 = st.columns(2)
+
+        with dcol1:
+            sales_stats = (
+                insp_df[insp_df["영업담당자"].astype(str).str.strip() != ""]
+                .groupby("영업담당자")
+                .size()
+                .reset_index(name="요청 건수")
+                .sort_values("요청 건수", ascending=False)
+            )
+            if not sales_stats.empty:
+                st.dataframe(sales_stats, use_container_width=True, hide_index=True)
+            else:
+                st.info("영업담당자 데이터가 없습니다.")
+
+        with dcol2:
+            inspector_stats = (
+                insp_df[insp_df["실사담당자"].astype(str).str.strip() != ""]
+                .groupby("실사담당자")
+                .size()
+                .reset_index(name="배정 건수")
+                .sort_values("배정 건수", ascending=False)
+            )
+            if not inspector_stats.empty:
+                st.dataframe(inspector_stats, use_container_width=True, hide_index=True)
+            else:
+                st.info("실사담당자 데이터가 없습니다.")
+
+        st.markdown("#### 월별 실사 / 계약 추이")
+
+        month_base = pd.DataFrame()
+
+        request_month = (
+            insp_df.dropna(subset=["요청일_dt"])
+            .assign(월=lambda x: x["요청일_dt"].dt.strftime("%Y-%m"))
+            .groupby("월")
+            .size()
+            .reset_index(name="요청 건수")
+        )
+
+        contract_month = (
+            insp_df[(insp_df["계약여부"] == "계약") & insp_df["계약일_dt"].notna()]
+            .assign(월=lambda x: x["계약일_dt"].dt.strftime("%Y-%m"))
+            .groupby("월")
+            .size()
+            .reset_index(name="계약 건수")
+        )
+
+        month_base = pd.merge(request_month, contract_month, on="월", how="outer").fillna(0)
+        if not month_base.empty:
+            month_base["요청 건수"] = month_base["요청 건수"].astype(int)
+            month_base["계약 건수"] = month_base["계약 건수"].astype(int)
+            month_base = month_base.sort_values("월")
+
+            fig, ax = plt.subplots(figsize=(4, 2.5))
+            ax.plot(month_base["월"], month_base["요청 건수"], marker="o", label="요청 건수")
+            ax.plot(month_base["월"], month_base["계약 건수"], marker="o", label="계약 건수")
+            ax.set_title("월별 실사 / 계약 추이")
+            ax.set_xlabel("월")
+            ax.set_ylabel("건수")
+            ax.legend()
+            
+
+            st.dataframe(month_base, use_container_width=True, hide_index=True)
+        else:
+            st.info("월별 실사/계약 데이터가 없습니다.")
+
+    st.divider()
+
+    # -------------------------------------------------
+    # 2. 시공 통계
+    # -------------------------------------------------
+    st.markdown("### 📅 시공 통계")
+
+    if sch_df.empty:
+        st.info("시공 데이터가 없습니다.")
+    else:
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("진행중", len(sch_df[sch_df["상태"] == "진행중"]))
+        s2.metric("완료", len(sch_df[sch_df["상태"] == "완료"]))
+        s3.metric("총 수량", total_schedule_qty)
+        s4.metric("완료율", f"{round((total_schedule_done / total_schedule) * 100, 1) if total_schedule > 0 else 0.0}%")
+
+        chart_col1, chart_col2 = st.columns(2)
+
+        with chart_col1:
+            schedule_status_counts = sch_df["상태"].value_counts().sort_values(ascending=False)
+            if not schedule_status_counts.empty:
+                fig, ax = plt.subplots(figsize=(4, 2.5))
+                schedule_status_counts.plot(kind="bar", ax=ax)
+                ax.set_title("시공 상태별 건수")
+                ax.set_xlabel("상태")
+                ax.set_ylabel("건수")
+                
+
+        with chart_col2:
+            manager_schedule_stats = (
+                sch_df[sch_df["시공담당"].astype(str).str.strip() != ""]
+                .groupby("시공담당")
+                .size()
+                .sort_values(ascending=False)
+            )
+            if not manager_schedule_stats.empty:
+                fig, ax = plt.subplots(figsize=(4, 2.5))
+                manager_schedule_stats.plot(kind="bar", ax=ax)
+                ax.set_title("시공담당자별 건수")
+                ax.set_xlabel("시공담당")
+                ax.set_ylabel("건수")
+                
+
+        schedule_table = (
+            sch_df[sch_df["시공담당"].astype(str).str.strip() != ""]
+            .groupby("시공담당")
+            .agg(
+                일정건수=("시공담당", "size"),
+                총수량=("수량", "sum")
+            )
+            .reset_index()
+            .sort_values("일정건수", ascending=False)
+        )
+
+        if not schedule_table.empty:
+            st.dataframe(schedule_table, use_container_width=True, hide_index=True)
+        else:
+            st.info("시공담당자 통계가 없습니다.")
+
+    st.divider()
+
+    # -------------------------------------------------
+    # 3. 연차 통계
+    # -------------------------------------------------
+    st.markdown("### 📊 연차 통계")
+
+    if vac_df.empty:
+        st.info("연차 데이터가 없습니다.")
+    else:
+        v1, v2, v3 = st.columns(3)
+        v1.metric("직원 수", total_staff)
+        v2.metric("총 사용연차", format_leave_number(total_used_leave))
+        v3.metric("총 잔여연차", format_leave_number(total_remain_leave))
+
+        chart_col1, chart_col2 = st.columns(2)
+
+        with chart_col1:
+            leave_used_df = vac_df[["이름", "사용 연차"]].copy()
+            leave_used_df = leave_used_df.sort_values("사용 연차", ascending=False).head(10)
+
+            if not leave_used_df.empty:
+                fig, ax = plt.subplots(figsize=(4, 2.5))
+                ax.bar(leave_used_df["이름"], leave_used_df["사용 연차"])
+                ax.set_title("직원별 사용 연차 TOP 10")
+                ax.set_xlabel("직원")
+                ax.set_ylabel("사용 연차")
+                
+
+        with chart_col2:
+            remain_low_df = vac_df[["이름", "잔여 연차"]].copy()
+            remain_low_df = remain_low_df.sort_values("잔여 연차", ascending=True).head(10)
+
+            if not remain_low_df.empty:
+                fig, ax = plt.subplots(figsize=(4, 2.5))
+                ax.bar(remain_low_df["이름"], remain_low_df["잔여 연차"])
+                ax.set_title("잔여 연차 낮은 직원 TOP 10")
+                ax.set_xlabel("직원")
+                ax.set_ylabel("잔여 연차")
+                
+
+        leave_table = vac_df[["이름", "발생 연차", "사용 연차", "잔여 연차"]].copy()
+        leave_table = leave_table.sort_values(["잔여 연차", "사용 연차"], ascending=[True, False])
+
+        st.dataframe(leave_table, use_container_width=True, hide_index=True)    
 
 def inspection_page():
     render_inspection_common_style()
@@ -2569,6 +2893,8 @@ else:
 
     if st.session_state.menu == "홈":
         home_page()
+    elif st.session_state.menu == "통계 대시보드":
+        dashboard_page()
     elif st.session_state.menu == "연차 관리":
         vacation_page()
     elif st.session_state.menu == "시공 일정":
