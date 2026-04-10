@@ -1344,8 +1344,8 @@ INSPECTION_COLUMNS = [
     "현장연락처",
     "주차면수",
     "상품구분",
-    "환경부"
-    "자투"
+    "환경부",
+    "자투",
     "신규설치수량",
     "기설치수량",
     "영업담당자",
@@ -1379,6 +1379,8 @@ INSPECTION_STATUS_OPTIONS = [
 ]
 
 PRODUCT_OPTIONS = ["아이센서", "전기차충전기", "이전설치"]
+ENV_OPTIONS = ["", "대상", "비대상"]
+JATU_OPTIONS = ["", "있음", "없음"]
 CONTRACT_OPTIONS = ["대기", "계약", "미계약"]
 
 
