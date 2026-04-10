@@ -1516,6 +1516,7 @@ def save_inspection_data(df, sheet=None):
     rows = [save_df.columns.tolist()] + save_df.astype(str).values.tolist()
     sheet.clear()
     sheet.update(rows)
+    st.cache_data.clear()
 
 def render_inspection_common_style():
     st.markdown("""
