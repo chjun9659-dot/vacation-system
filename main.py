@@ -1481,6 +1481,8 @@ def load_inspection_data():
             "전화번호": "현장연락처",
             "주차면수": "주차면수",
             "상품구분": "상품구분",
+            "환경부": "환경부",
+            "자투": "자투",
             "신규설치수량": "신규설치수량",
             "수량": "신규설치수량",
             "기설치수량": "기설치수량",
@@ -1938,6 +1940,10 @@ def inspection_page():
         else:
             show_df["첨부파일열기"] = show_df["첨부파일링크"]
 
+            for col in show_df.columns:
+                show_df[col] = show_df[col].apply(
+                    lambda x: "" if pd.isna(x) or str(x).strip().lower() in ["none", "nan", "nat"] else x
+                )
             styled_df = show_df.style.map(status_style, subset=["진행상태"]).map(contract_style, subset=["계약여부"])
 
             st.dataframe(
