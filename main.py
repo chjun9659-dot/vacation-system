@@ -1638,8 +1638,8 @@ def inspection_page():
     show_inspection_flash()
 
     df = load_inspection_data()
+    df = normalize_inspection_df(df)
     df = df.reset_index(drop=True)
-    df["row_id"] = df.index
 
     total_count = len(df)
     pending_count = len(df[df["진행상태"] == "요청접수"])
@@ -2316,20 +2316,30 @@ def inspection_page():
 
                     if save_submit:
                         save_df = df[INSPECTION_COLUMNS].copy()
+                        save_df = normalize_inspection_df(save_df)
+
                         save_df.loc[view_idx, "요청일"] = str(edit_req_date)
-                        save_df.loc[view_idx, "운영사"] = edit_operator.strip()
-                        save_df.loc[view_idx, "현장명"] = edit_name.strip()
-                        save_df.loc[view_idx, "현장주소"] = edit_addr.strip()
-                        save_df.loc[view_idx, "현장연락처"] = edit_phone.strip()
-                        save_df.loc[view_idx, "상품구분"] = edit_product
-                        save_df.loc[view_idx, "주차면수"] = int(edit_parking)
-                        save_df.loc[view_idx, "신규설치수량"] = int(edit_new_qty)
-                        save_df.loc[view_idx, "기설치수량"] = int(edit_old_qty)
-                        save_df.loc[view_idx, "영업담당자"] = edit_sales.strip()
-                        save_df.loc[view_idx, "영업담당연락처"] = edit_sales_phone.strip()
-                        save_df.loc[view_idx, "요청내용"] = edit_request.strip()
-                        save_df.loc[view_idx, "비고"] = edit_note.strip()
+                        save_df.loc[view_idx, "운영사"] = str(edit_operator).strip()
+                        save_df.loc[view_idx, "현장명"] = str(edit_name).strip()
+                        save_df.loc[view_idx, "현장주소"] = str(edit_addr).strip()
+                        save_df.loc[view_idx, "현장연락처"] = str(edit_phone).strip()
+                        save_df.loc[view_idx, "상품구분"] = str(edit_product).strip()
+
+                        save_df.loc[view_idx, "주차면수"] = safe_int(edit_parking, 0)
+                        save_df.loc[view_idx, "신규설치수량"] = safe_int(edit_new_qty, 0)
+                        save_df.loc[view_idx, "기설치수량"] = safe_int(edit_old_qty, 0)
+
+                        save_df.loc[view_idx, "영업담당자"] = str(edit_sales).strip()
+                        save_df.loc[view_idx, "영업담당연락처"] = str(edit_sales_phone).strip()
+                        save_df.loc[view_idx, "요청내용"] = str(edit_request).strip()
+                        save_df.loc[view_idx, "비고"] = str(edit_note).strip()
+
                         save_inspection_data(save_df)
+
+                        st.session_state.inspection_edit_mode = False
+                        st.session_state.inspection_edit_target = None
+                        set_inspection_flash("기본 정보 수정 완료!", "success")
+                        st.rerun()
 
                         st.session_state.inspection_edit_mode = False
                         st.session_state.inspection_edit_target = None
