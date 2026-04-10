@@ -1705,9 +1705,19 @@ def dashboard_page():
     if st.session_state.menu != "통계 대시보드":
         return
 
+    st.markdown("""
+    <style>
+    div[data-testid="stMetricValue"] {
+        font-size: 24px !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 14px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    st.markdown('<div class="erp-page-title">📈 통계 대시보드</div>', unsafe_allow_html=True)
-    st.markdown('<div class="erp-page-desc">실사 / 시공 / 연차 데이터를 한 화면에서 확인합니다.</div>', unsafe_allow_html=True)
+    st.markdown("## 📈 통계 대시보드")
+    st.write("실사 / 시공 / 연차 데이터를 한 화면에서 확인합니다.")
 
     # -------------------------------------------------
     # 데이터 로드
@@ -1732,7 +1742,7 @@ def dashboard_page():
         vac_df = pd.DataFrame()
 
     # -------------------------------------------------
-    # 공통 안전 처리
+    # 공통 전처리
     # -------------------------------------------------
     if not insp_df.empty:
         insp_df["요청일_dt"] = pd.to_datetime(insp_df["요청일"], errors="coerce")
@@ -1749,7 +1759,7 @@ def dashboard_page():
                 vac_df[col] = pd.to_numeric(vac_df[col], errors="coerce").fillna(0)
 
     # -------------------------------------------------
-    # 상단 요약 카드
+    # 상단 요약 KPI
     # -------------------------------------------------
     total_requests = len(insp_df)
     total_contracts = len(insp_df[insp_df["계약여부"] == "계약"]) if not insp_df.empty else 0
@@ -1760,11 +1770,8 @@ def dashboard_page():
 
     total_schedule = len(sch_df)
     total_schedule_done = len(sch_df[sch_df["상태"] == "완료"]) if not sch_df.empty else 0
-    total_schedule_qty = int(pd.to_numeric(sch_df["수량"], errors="coerce").fillna(0).sum()) if not sch_df.empty else 0
 
     total_staff = len(vac_df) if not vac_df.empty else 0
-    total_used_leave = float(vac_df["사용 연차"].sum()) if not vac_df.empty and "사용 연차" in vac_df.columns else 0.0
-    total_remain_leave = float(vac_df["잔여 연차"].sum()) if not vac_df.empty and "잔여 연차" in vac_df.columns else 0.0
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("전체 실사요청", total_requests)
@@ -1779,7 +1786,7 @@ def dashboard_page():
     # -------------------------------------------------
     # 1. 실사 통계
     # -------------------------------------------------
-    st.markdown("### 🔎 실사 통계")
+    st.markdown("## 🔎 실사 통계")
 
     if insp_df.empty:
         st.info("실사 데이터가 없습니다.")
@@ -1790,27 +1797,7 @@ def dashboard_page():
         i3.metric("실사완료", len(insp_df[insp_df["진행상태"] == "실사완료"]))
         i4.metric("미계약종결", len(insp_df[insp_df["진행상태"] == "미계약종결"]))
 
-        chart_col1, chart_col2 = st.columns(2)
-
-        with chart_col1:
-            status_counts = insp_df["진행상태"].value_counts().sort_values(ascending=False)
-            if not status_counts.empty:
-                status_counts.plot(kind="bar", ax=ax)
-                ax.set_title("실사 진행상태별 건수")
-                ax.set_xlabel("진행상태")
-                ax.set_ylabel("건수")
-                
-
-        with chart_col2:
-            contract_counts = insp_df["계약여부"].replace("", "대기").value_counts().sort_values(ascending=False)
-            if not contract_counts.empty:
-                contract_counts.plot(kind="bar", ax=ax)
-                ax.set_title("계약여부별 건수")
-                ax.set_xlabel("계약여부")
-                ax.set_ylabel("건수")
-               
-
-        st.markdown("#### 담당자별 실적")
+        st.markdown("### 담당자별 실적")
 
         dcol1, dcol2 = st.columns(2)
 
@@ -1822,6 +1809,7 @@ def dashboard_page():
                 .reset_index(name="요청 건수")
                 .sort_values("요청 건수", ascending=False)
             )
+
             if not sales_stats.empty:
                 st.dataframe(sales_stats, use_container_width=True, hide_index=True)
             else:
@@ -1835,14 +1823,13 @@ def dashboard_page():
                 .reset_index(name="배정 건수")
                 .sort_values("배정 건수", ascending=False)
             )
+
             if not inspector_stats.empty:
                 st.dataframe(inspector_stats, use_container_width=True, hide_index=True)
             else:
                 st.info("실사담당자 데이터가 없습니다.")
 
-        st.markdown("#### 월별 실사 / 계약 추이")
-
-        month_base = pd.DataFrame()
+        st.markdown("### 월별 실사 / 계약 추이")
 
         request_month = (
             insp_df.dropna(subset=["요청일_dt"])
@@ -1861,19 +1848,11 @@ def dashboard_page():
         )
 
         month_base = pd.merge(request_month, contract_month, on="월", how="outer").fillna(0)
+
         if not month_base.empty:
             month_base["요청 건수"] = month_base["요청 건수"].astype(int)
             month_base["계약 건수"] = month_base["계약 건수"].astype(int)
             month_base = month_base.sort_values("월")
-
-            ax.plot(month_base["월"], month_base["요청 건수"], marker="o", label="요청 건수")
-            ax.plot(month_base["월"], month_base["계약 건수"], marker="o", label="계약 건수")
-            ax.set_title("월별 실사 / 계약 추이")
-            ax.set_xlabel("월")
-            ax.set_ylabel("건수")
-            ax.legend()
-            
-
             st.dataframe(month_base, use_container_width=True, hide_index=True)
         else:
             st.info("월별 실사/계약 데이터가 없습니다.")
@@ -1883,41 +1862,19 @@ def dashboard_page():
     # -------------------------------------------------
     # 2. 시공 통계
     # -------------------------------------------------
-    st.markdown("### 📅 시공 통계")
+    st.markdown("## 📅 시공 통계")
 
     if sch_df.empty:
         st.info("시공 데이터가 없습니다.")
     else:
+        total_schedule_qty = int(pd.to_numeric(sch_df["수량"], errors="coerce").fillna(0).sum()) if not sch_df.empty else 0
+        complete_rate = round((total_schedule_done / total_schedule) * 100, 1) if total_schedule > 0 else 0.0
+
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("진행중", len(sch_df[sch_df["상태"] == "진행중"]))
         s2.metric("완료", len(sch_df[sch_df["상태"] == "완료"]))
         s3.metric("총 수량", total_schedule_qty)
-        s4.metric("완료율", f"{round((total_schedule_done / total_schedule) * 100, 1) if total_schedule > 0 else 0.0}%")
-
-        chart_col1, chart_col2 = st.columns(2)
-
-        with chart_col1:
-            schedule_status_counts = sch_df["상태"].value_counts().sort_values(ascending=False)
-            if not schedule_status_counts.empty:
-                schedule_status_counts.plot(kind="bar", ax=ax)
-                ax.set_title("시공 상태별 건수")
-                ax.set_xlabel("상태")
-                ax.set_ylabel("건수")
-                
-
-        with chart_col2:
-            manager_schedule_stats = (
-                sch_df[sch_df["시공담당"].astype(str).str.strip() != ""]
-                .groupby("시공담당")
-                .size()
-                .sort_values(ascending=False)
-            )
-            if not manager_schedule_stats.empty:
-                manager_schedule_stats.plot(kind="bar", ax=ax)
-                ax.set_title("시공담당자별 건수")
-                ax.set_xlabel("시공담당")
-                ax.set_ylabel("건수")
-                
+        s4.metric("완료율", f"{complete_rate}%")
 
         schedule_table = (
             sch_df[sch_df["시공담당"].astype(str).str.strip() != ""]
@@ -1940,44 +1897,23 @@ def dashboard_page():
     # -------------------------------------------------
     # 3. 연차 통계
     # -------------------------------------------------
-    st.markdown("### 📊 연차 통계")
+    st.markdown("## 📊 연차 통계")
 
     if vac_df.empty:
         st.info("연차 데이터가 없습니다.")
     else:
+        total_used_leave = float(vac_df["사용 연차"].sum()) if "사용 연차" in vac_df.columns else 0.0
+        total_remain_leave = float(vac_df["잔여 연차"].sum()) if "잔여 연차" in vac_df.columns else 0.0
+
         v1, v2, v3 = st.columns(3)
         v1.metric("직원 수", total_staff)
         v2.metric("총 사용연차", format_leave_number(total_used_leave))
         v3.metric("총 잔여연차", format_leave_number(total_remain_leave))
 
-        chart_col1, chart_col2 = st.columns(2)
-
-        with chart_col1:
-            leave_used_df = vac_df[["이름", "사용 연차"]].copy()
-            leave_used_df = leave_used_df.sort_values("사용 연차", ascending=False).head(10)
-
-            if not leave_used_df.empty:
-                ax.bar(leave_used_df["이름"], leave_used_df["사용 연차"])
-                ax.set_title("직원별 사용 연차 TOP 10")
-                ax.set_xlabel("직원")
-                ax.set_ylabel("사용 연차")
-                
-
-        with chart_col2:
-            remain_low_df = vac_df[["이름", "잔여 연차"]].copy()
-            remain_low_df = remain_low_df.sort_values("잔여 연차", ascending=True).head(10)
-
-            if not remain_low_df.empty:
-                ax.bar(remain_low_df["이름"], remain_low_df["잔여 연차"])
-                ax.set_title("잔여 연차 낮은 직원 TOP 10")
-                ax.set_xlabel("직원")
-                ax.set_ylabel("잔여 연차")
-                
-
         leave_table = vac_df[["이름", "발생 연차", "사용 연차", "잔여 연차"]].copy()
         leave_table = leave_table.sort_values(["잔여 연차", "사용 연차"], ascending=[True, False])
 
-        st.dataframe(leave_table, use_container_width=True, hide_index=True)    
+        st.dataframe(leave_table, use_container_width=True, hide_index=True) 
 
 def inspection_page():
     render_inspection_common_style()
