@@ -1896,10 +1896,23 @@ def inspection_page():
                 use_container_width=True,
                 hide_index=True,
                 column_config={
+                    "현장명": st.column_config.TextColumn("현장명", width="medium"),
+                    "현장주소": st.column_config.TextColumn("현장주소", width="large"),
+                    "운영사": st.column_config.TextColumn("운영사", width="medium"),
+                    "신규설치수량": st.column_config.NumberColumn("신규설치수량", width="small"),
+                    "기설치수량": st.column_config.NumberColumn("기설치수량", width="small"),
+                    "주차면수": st.column_config.NumberColumn("주차면수", width="small"),
+                    "영업담당자": st.column_config.TextColumn("영업담당자", width="small"),
+                    "영업담당연락처": st.column_config.TextColumn("영업담당연락처", width="medium"),
+                    "실사담당자": st.column_config.TextColumn("실사담당자", width="small"),
+                    "실사예정일": st.column_config.TextColumn("실사예정일", width="small"),
+                    "진행상태": st.column_config.TextColumn("진행상태", width="small"),
+                    "계약여부": st.column_config.TextColumn("계약여부", width="small"),
                     "첨부파일링크": None,
                     "첨부파일열기": st.column_config.LinkColumn(
                         "첨부파일 열기",
-                        display_text="열기"
+                        display_text="열기",
+                        width="small"
                     )
                 }
             )
