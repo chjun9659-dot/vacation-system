@@ -1398,6 +1398,7 @@ def show_inspection_flash():
     msg = st.session_state.pop("inspection_flash", "")
     msg_type = st.session_state.pop("inspection_flash_type", "success")
 
+
     if msg:
         if msg_type == "success":
             st.success(msg)
@@ -1499,6 +1500,7 @@ def load_inspection_data():
             if col not in df.columns:
                 df[col] = ""
 
+        df = normalize_inspection_df(df)
         return df
 
     except Exception as e:
@@ -1640,6 +1642,7 @@ def inspection_page():
     df = load_inspection_data()
     df = normalize_inspection_df(df)
     df = df.reset_index(drop=True)
+    df["row_id"] = df.index
 
     total_count = len(df)
     pending_count = len(df[df["진행상태"] == "요청접수"])
