@@ -13,18 +13,7 @@ import io
 import pickle
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-import platform
 
-if platform.system() == "Windows":
-    plt.rc("font", family="Malgun Gothic")
-elif platform.system() == "Darwin":
-    plt.rc("font", family="AppleGothic")
-else:
-    plt.rc("font", family="NanumGothic")
-
-plt.rcParams["axes.unicode_minus"] = False
 
 # 👉 여기에 넣으세요
 DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
