@@ -1423,21 +1423,31 @@ def normalize_inspection_df(df):
         if col not in df.columns:
             df[col] = ""
 
-    # 컬럼 순서 맞추기 + 없는 컬럼 자동 채우기
+    # 컬럼 순서 맞추기
     df = df.reindex(columns=INSPECTION_COLUMNS, fill_value="").copy()
 
+    # 숫자 컬럼 (없는 경우도 대비)
     int_cols = ["주차면수", "신규설치수량", "기설치수량", "계약수량"]
     for col in int_cols:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
-    df["계약금액"] = pd.to_numeric(df["계약금액"], errors="coerce").fillna(0)
+    # 금액
+    if "계약금액" in df.columns:
+        df["계약금액"] = pd.to_numeric(df["계약금액"], errors="coerce").fillna(0)
 
+    # 날짜
     date_cols = ["요청일", "실사예정일", "실사완료일", "계약일"]
     for col in date_cols:
-        df[col] = df[col].astype(str)
+        if col in df.columns:
+            df[col] = df[col].astype(str)
 
-    df["진행상태"] = df["진행상태"].astype(str).replace("", "요청접수")
-    df["계약여부"] = df["계약여부"].astype(str).replace("", "대기")
+    # 상태값
+    if "진행상태" in df.columns:
+        df["진행상태"] = df["진행상태"].astype(str).replace("", "요청접수")
+
+    if "계약여부" in df.columns:
+        df["계약여부"] = df["계약여부"].astype(str).replace("", "대기")
 
     return df
 
