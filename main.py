@@ -1795,7 +1795,6 @@ def dashboard_page():
         with chart_col1:
             status_counts = insp_df["진행상태"].value_counts().sort_values(ascending=False)
             if not status_counts.empty:
-                fig, ax = plt.subplots(figsize=(4, 2.5))
                 status_counts.plot(kind="bar", ax=ax)
                 ax.set_title("실사 진행상태별 건수")
                 ax.set_xlabel("진행상태")
@@ -1805,7 +1804,6 @@ def dashboard_page():
         with chart_col2:
             contract_counts = insp_df["계약여부"].replace("", "대기").value_counts().sort_values(ascending=False)
             if not contract_counts.empty:
-                fig, ax = plt.subplots(figsize=(4, 2.5))
                 contract_counts.plot(kind="bar", ax=ax)
                 ax.set_title("계약여부별 건수")
                 ax.set_xlabel("계약여부")
@@ -1868,7 +1866,6 @@ def dashboard_page():
             month_base["계약 건수"] = month_base["계약 건수"].astype(int)
             month_base = month_base.sort_values("월")
 
-            fig, ax = plt.subplots(figsize=(4, 2.5))
             ax.plot(month_base["월"], month_base["요청 건수"], marker="o", label="요청 건수")
             ax.plot(month_base["월"], month_base["계약 건수"], marker="o", label="계약 건수")
             ax.set_title("월별 실사 / 계약 추이")
@@ -1902,7 +1899,6 @@ def dashboard_page():
         with chart_col1:
             schedule_status_counts = sch_df["상태"].value_counts().sort_values(ascending=False)
             if not schedule_status_counts.empty:
-                fig, ax = plt.subplots(figsize=(4, 2.5))
                 schedule_status_counts.plot(kind="bar", ax=ax)
                 ax.set_title("시공 상태별 건수")
                 ax.set_xlabel("상태")
@@ -1917,7 +1913,6 @@ def dashboard_page():
                 .sort_values(ascending=False)
             )
             if not manager_schedule_stats.empty:
-                fig, ax = plt.subplots(figsize=(4, 2.5))
                 manager_schedule_stats.plot(kind="bar", ax=ax)
                 ax.set_title("시공담당자별 건수")
                 ax.set_xlabel("시공담당")
@@ -1962,7 +1957,6 @@ def dashboard_page():
             leave_used_df = leave_used_df.sort_values("사용 연차", ascending=False).head(10)
 
             if not leave_used_df.empty:
-                fig, ax = plt.subplots(figsize=(4, 2.5))
                 ax.bar(leave_used_df["이름"], leave_used_df["사용 연차"])
                 ax.set_title("직원별 사용 연차 TOP 10")
                 ax.set_xlabel("직원")
@@ -1974,7 +1968,6 @@ def dashboard_page():
             remain_low_df = remain_low_df.sort_values("잔여 연차", ascending=True).head(10)
 
             if not remain_low_df.empty:
-                fig, ax = plt.subplots(figsize=(4, 2.5))
                 ax.bar(remain_low_df["이름"], remain_low_df["잔여 연차"])
                 ax.set_title("잔여 연차 낮은 직원 TOP 10")
                 ax.set_xlabel("직원")
