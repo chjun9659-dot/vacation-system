@@ -1528,15 +1528,14 @@ def save_inspection_data(df, sheet=None):
 
     save_df = normalize_inspection_df(df).copy()
 
-    # row_id 같은 임시 컬럼 제거
+    # 임시 컬럼 제거
     if "row_id" in save_df.columns:
         save_df = save_df.drop(columns=["row_id"])
 
-    # 완전 빈 데이터면 저장 금지
+    # 빈 데이터 저장 방지
     if save_df.empty:
         raise Exception("실사 데이터가 비어 있어 저장을 중단했습니다.")
 
-    # 값 정리
     def clean_cell(x):
         if pd.isna(x):
             return ""
@@ -1552,7 +1551,6 @@ def save_inspection_data(df, sheet=None):
 
     rows = [save_df.columns.tolist()] + save_df.values.tolist()
 
-    # 헤더만 있고 데이터가 없으면 저장 금지
     if len(rows) <= 1:
         raise Exception("실사 데이터 행이 없어 저장을 중단했습니다.")
 
@@ -1561,8 +1559,6 @@ def save_inspection_data(df, sheet=None):
 
     st.cache_data.clear()
 
-    except Exception as e:
-        raise Exception(f"실사 시트 저장 실패: {e}")
 
 def render_inspection_common_style():
     st.markdown("""
