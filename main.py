@@ -1418,11 +1418,13 @@ def set_inspection_flash(msg, msg_type="success"):
 
 
 def normalize_inspection_df(df):
+    # 컬럼 없으면 자동 생성
     for col in INSPECTION_COLUMNS:
         if col not in df.columns:
             df[col] = ""
 
-    df = df[INSPECTION_COLUMNS].copy()
+    # 컬럼 순서 맞추기 + 없는 컬럼 자동 채우기
+    df = df.reindex(columns=INSPECTION_COLUMNS, fill_value="").copy()
 
     int_cols = ["주차면수", "신규설치수량", "기설치수량", "계약수량"]
     for col in int_cols:
