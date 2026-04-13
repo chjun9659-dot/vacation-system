@@ -2753,7 +2753,7 @@ def inspection_page():
                             try:
                                 new_attachment_name, new_attachment_link = upload_file_to_drive(
                                     edit_uploaded_file,
-                                    folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
+                                    folder_id="13W2N1v9IBiuZEstmTrvt57Zg8XQiHt7J"
                                 )
                                 save_df.loc[view_idx, "첨부파일명"] = new_attachment_name
                                 save_df.loc[view_idx, "첨부파일링크"] = new_attachment_link
