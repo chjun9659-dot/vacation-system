@@ -10,13 +10,10 @@ from openpyxl import load_workbook
 import shutil
 import os
 import io
-import pickle
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 
 
 # 👉 여기에 넣으세요
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive']
 
 st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 
@@ -930,61 +927,60 @@ def get_gspread_client():
 
 
 @st.cache_resource
-def get_drive_service_oauth():
-    creds = None
-
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    token_path = os.path.join(base_dir, "token.pickle")
-    client_secret_path = os.path.join(base_dir, "client_secret.json")
-
-    if not os.path.exists(client_secret_path):
-        raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
-
-    if os.path.exists(token_path):
-        with open(token_path, "rb") as token:
-            creds = pickle.load(token)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                client_secret_path,
-                DRIVE_SCOPES
+def get_drive_service():
+    try:
+        # 1. 로컬 key.json 우선
+        if os.path.exists("key.json"):
+            creds = Credentials.from_service_account_file(
+                "key.json",
+                scopes=DRIVE_SCOPES
             )
-            creds = flow.run_local_server(port=0)
+            return build("drive", "v3", credentials=creds)
 
-        with open(token_path, "wb") as token:
-            pickle.dump(creds, token)
+        # 2. Streamlit Cloud secrets 사용
+        secrets_dict = st.secrets.to_dict()
+        if "gcp_service_account" in secrets_dict:
+            creds_dict = secrets_dict["gcp_service_account"]
+            creds = Credentials.from_service_account_info(
+                creds_dict,
+                scopes=DRIVE_SCOPES
+            )
+            return build("drive", "v3", credentials=creds)
 
-    return build("drive", "v3", credentials=creds)
+        raise Exception("key.json 또는 st.secrets의 gcp_service_account를 찾지 못했습니다.")
+
+    except Exception as e:
+        raise Exception(f"구글 드라이브 인증 실패: {e}")
 
 
 def upload_file_to_drive(uploaded_file, folder_id=None):
     try:
-        drive_service = get_drive_service_oauth()
+        drive_service = get_drive_service()
 
         file_stream = io.BytesIO(uploaded_file.getvalue())
-        file_metadata = {"name": uploaded_file.name}
+
+        file_metadata = {
+            "name": uploaded_file.name
+        }
 
         if folder_id:
             file_metadata["parents"] = [folder_id]
 
         media = MediaIoBaseUpload(
             file_stream,
-            mimetype=uploaded_file.type,
+            mimetype=uploaded_file.type if uploaded_file.type else "application/octet-stream",
             resumable=False
         )
 
         uploaded = drive_service.files().create(
             body=file_metadata,
             media_body=media,
-            fields="id, name, webViewLink"
+            fields="id, name"
         ).execute()
 
         file_id = uploaded.get("id")
 
-        # 첨부파일 열람 권한 부여
+        # 링크 열람 가능 권한 부여
         drive_service.permissions().create(
             fileId=file_id,
             body={
@@ -993,10 +989,13 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
             }
         ).execute()
 
-        return uploaded.get("name", uploaded_file.name), uploaded.get("webViewLink", "")
+        view_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+
+        return uploaded.get("name", uploaded_file.name), view_link
 
     except Exception as e:
         raise Exception(f"파일 업로드 실패: {e}")
+
 @st.cache_resource
 def get_vacation_sheet():
     client = get_gspread_client()
