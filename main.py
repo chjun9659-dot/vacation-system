@@ -911,22 +911,75 @@ DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 
 @st.cache_resource
-def get_gspread_client():
+def get_drive_service():
     try:
+        # 1) 로컬 key.json 우선
         if os.path.exists("key.json"):
-            creds = ServiceAccountCredentials.from_json_keyfile_name("key.json", SCOPE)
-            return gspread.authorize(creds)
+            creds = Credentials.from_service_account_file(
+                "key.json",
+                scopes=["https://www.googleapis.com/auth/drive"]
+            )
+            return build("drive", "v3", credentials=creds)
 
+        # 2) Streamlit secrets 사용
         secrets_dict = st.secrets.to_dict()
         if "gcp_service_account" in secrets_dict:
             creds_dict = secrets_dict["gcp_service_account"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPE)
-            return gspread.authorize(creds)
+            creds = Credentials.from_service_account_info(
+                creds_dict,
+                scopes=["https://www.googleapis.com/auth/drive"]
+            )
+            return build("drive", "v3", credentials=creds)
 
-        raise FileNotFoundError("key.json 또는 st.secrets의 gcp_service_account를 찾지 못했습니다.")
+        raise Exception("key.json 또는 st.secrets의 gcp_service_account를 찾지 못했습니다.")
 
     except Exception as e:
-        raise Exception(f"구글시트 인증 실패: {e}")
+        raise Exception(f"구글 드라이브 인증 실패: {e}")
+
+
+def upload_file_to_drive(uploaded_file, folder_id=None):
+    try:
+        drive_service = get_drive_service()
+
+        file_stream = io.BytesIO(uploaded_file.getvalue())
+
+        file_metadata = {
+            "name": uploaded_file.name
+        }
+
+        if folder_id:
+            file_metadata["parents"] = [folder_id]
+
+        media = MediaIoBaseUpload(
+            file_stream,
+            mimetype=uploaded_file.type if uploaded_file.type else "application/octet-stream",
+            resumable=False
+        )
+
+        uploaded = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, name, webViewLink, webContentLink"
+        ).execute()
+
+        file_id = uploaded.get("id")
+
+        # 링크로 열 수 있게 공개 읽기 권한 부여
+        drive_service.permissions().create(
+            fileId=file_id,
+            body={
+                "type": "anyone",
+                "role": "reader"
+            }
+        ).execute()
+
+        # 권한 반영 후 열람 링크 생성
+        view_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+
+        return uploaded.get("name", uploaded_file.name), view_link
+
+    except Exception as e:
+        raise Exception(f"파일 업로드 실패: {e}")
 
 
 @st.cache_resource
