@@ -10,10 +10,13 @@ from openpyxl import load_workbook
 import shutil
 import os
 import io
+import pickle
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 
 
 # 👉 여기에 넣으세요
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive']
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 
@@ -904,7 +907,7 @@ SCOPE = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive']
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 
 @st.cache_resource
@@ -927,83 +930,73 @@ def get_gspread_client():
 
 
 @st.cache_resource
-def get_drive_service():
-    try:
-        # 1. 로컬 key.json 우선
-        if os.path.exists("key.json"):
-            creds = Credentials.from_service_account_file(
-                "key.json",
-                scopes=DRIVE_SCOPES
+def get_drive_service_oauth():
+    creds = None
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    token_path = os.path.join(base_dir, "token.pickle")
+    client_secret_path = os.path.join(base_dir, "client_secret.json")
+
+    if not os.path.exists(client_secret_path):
+        raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
+
+    if os.path.exists(token_path):
+        with open(token_path, "rb") as token:
+            creds = pickle.load(token)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                client_secret_path,
+                DRIVE_SCOPES
             )
-            return build("drive", "v3", credentials=creds)
+            creds = flow.run_local_server(port=0)
 
-        # 2. Streamlit Cloud secrets 사용
-        secrets_dict = st.secrets.to_dict()
-        if "gcp_service_account" in secrets_dict:
-            creds_dict = secrets_dict["gcp_service_account"]
-            creds = Credentials.from_service_account_info(
-                creds_dict,
-                scopes=DRIVE_SCOPES
-            )
-            return build("drive", "v3", credentials=creds)
+        with open(token_path, "wb") as token:
+            pickle.dump(creds, token)
 
-        raise Exception("key.json 또는 st.secrets의 gcp_service_account를 찾지 못했습니다.")
-
-    except Exception as e:
-        raise Exception(f"구글 드라이브 인증 실패: {e}")
+    return build("drive", "v3", credentials=creds)
 
 
 def upload_file_to_drive(uploaded_file, folder_id=None):
     try:
-        drive_service = get_drive_service()
+        drive_service = get_drive_service_oauth()
 
-        file_bytes = uploaded_file.getvalue()
-        file_stream = io.BytesIO(file_bytes)
-
-        file_metadata = {
-            "name": uploaded_file.name
-        }
+        file_stream = io.BytesIO(uploaded_file.getvalue())
+        file_metadata = {"name": uploaded_file.name}
 
         if folder_id:
             file_metadata["parents"] = [folder_id]
 
         media = MediaIoBaseUpload(
             file_stream,
-            mimetype=uploaded_file.type if uploaded_file.type else "application/octet-stream",
-            resumable=True
+            mimetype=uploaded_file.type,
+            resumable=False
         )
 
-        request = drive_service.files().create(
+        uploaded = drive_service.files().create(
             body=file_metadata,
             media_body=media,
-            fields="id, name",
-            supportsAllDrives=True
-        )
+            fields="id, name, webViewLink"
+        ).execute()
 
-        response = None
-        while response is None:
-            status, response = request.next_chunk(num_retries=3)
+        file_id = uploaded.get("id")
 
-        file_id = response.get("id")
-        if not file_id:
-            raise Exception("업로드는 되었지만 file_id를 받지 못했습니다.")
-
+        # 첨부파일 열람 권한 부여
         drive_service.permissions().create(
             fileId=file_id,
             body={
                 "type": "anyone",
                 "role": "reader"
-            },
-            supportsAllDrives=True
-        ).execute(num_retries=3)
+            }
+        ).execute()
 
-        view_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
-
-        return response.get("name", uploaded_file.name), view_link
+        return uploaded.get("name", uploaded_file.name), uploaded.get("webViewLink", "")
 
     except Exception as e:
         raise Exception(f"파일 업로드 실패: {e}")
-
 @st.cache_resource
 def get_vacation_sheet():
     client = get_gspread_client()
@@ -1417,14 +1410,9 @@ JATU_OPTIONS = ["", "있음", "없음"]
 CONTRACT_OPTIONS = ["대기", "계약", "미계약"]
 
 
-@st.cache_resource
 def get_inspection_sheet():
     client = get_gspread_client()
-
-    # 실사관리 스프레드시트 URL 또는 ID로 직접 연결
-    spreadsheet = client.open_by_key("1tvS8BTU__80SAHkPhDeNJX_etfMD-kYIVYbBFRTw0qQ")
-
-    # 실제 작업 시트명
+    spreadsheet = client.open(INSPECTION_SHEET_NAME)
     worksheet = spreadsheet.worksheet("실사복구")
     return worksheet
 
@@ -2059,7 +2047,7 @@ def inspection_page():
                         try:
                             attachment_name, attachment_link = upload_file_to_drive(
                                 uploaded_file,
-                                folder_id="https://docs.google.com/spreadsheets/d/1tvS8BTU__80SAHkPhDeNJX_etfMD-kYIVYbBFRTw0qQ/edit?gid=0#gid=0"
+                                folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
                             )
                         except Exception as e:
                             st.error(str(e))
@@ -2766,7 +2754,7 @@ def inspection_page():
                             try:
                                 new_attachment_name, new_attachment_link = upload_file_to_drive(
                                     edit_uploaded_file,
-                                    folder_id="https://docs.google.com/spreadsheets/d/1tvS8BTU__80SAHkPhDeNJX_etfMD-kYIVYbBFRTw0qQ/edit?gid=0#gid=0"
+                                    folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
                                 )
                                 save_df.loc[view_idx, "첨부파일명"] = new_attachment_name
                                 save_df.loc[view_idx, "첨부파일링크"] = new_attachment_link
