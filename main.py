@@ -937,26 +937,47 @@ def get_drive_service_oauth():
     token_path = os.path.join(base_dir, "token.pickle")
     client_secret_path = os.path.join(base_dir, "client_secret.json")
 
-    if not os.path.exists(client_secret_path):
-        raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
-
+    # =========================
+    # 1. 기존 토큰 불러오기
+    # =========================
     if os.path.exists(token_path):
         with open(token_path, "rb") as token:
             creds = pickle.load(token)
 
+    # =========================
+    # 2. 인증 처리
+    # =========================
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                client_secret_path,
-                DRIVE_SCOPES
-            )
+            # 👉 secrets 우선 사용
+            if "gdrive_json" in st.secrets:
+                creds_dict = st.secrets["gdrive_json"]
+
+                flow = InstalledAppFlow.from_client_config(
+                    creds_dict,
+                    DRIVE_SCOPES
+                )
+            else:
+                # 👉 로컬용
+                if not os.path.exists(client_secret_path):
+                    raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
+
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    client_secret_path,
+                    DRIVE_SCOPES
+                )
+
             creds = flow.run_local_server(port=0)
 
+        # 토큰 저장
         with open(token_path, "wb") as token:
             pickle.dump(creds, token)
 
+    # =========================
+    # 3. 서비스 생성
+    # =========================
     return build("drive", "v3", credentials=creds)
 
 
