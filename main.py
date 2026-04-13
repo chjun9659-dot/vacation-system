@@ -2105,19 +2105,9 @@ def inspection_page():
             note = st.text_input("비고", key=f"note_{form_ver}")
 
             st.markdown("#### 첨부파일")
-            
-            # 로그인 상태 확인
-            if "google_drive_token" not in st.session_state:
-                st.warning("⚠️ 첨부파일 업로드하려면 구글 로그인 필요")
-                begin_google_drive_oauth()
-            else:
-                st.success("✅ 구글 드라이브 연결됨")
-                
-            uploaded_file = st.file_uploader(
-                "실사 관련 파일 업로드",
-                type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
-                key=f"insp_uploaded_file_new_{form_ver}"
-            )
+
+            st.info("📌 첨부파일은 관리자만 등록 가능합니다. (현재 시스템에서는 업로드 불가)")
+            uploaded_file = None
 
             submit_request = st.form_submit_button("실사 요청 등록")
 
