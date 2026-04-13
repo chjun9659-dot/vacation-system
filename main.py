@@ -911,75 +911,22 @@ DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 
 @st.cache_resource
-def get_drive_service():
+def get_gspread_client():
     try:
-        # 1) 로컬 key.json 우선
         if os.path.exists("key.json"):
-            creds = Credentials.from_service_account_file(
-                "key.json",
-                scopes=["https://www.googleapis.com/auth/drive"]
-            )
-            return build("drive", "v3", credentials=creds)
+            creds = ServiceAccountCredentials.from_json_keyfile_name("key.json", SCOPE)
+            return gspread.authorize(creds)
 
-        # 2) Streamlit secrets 사용
         secrets_dict = st.secrets.to_dict()
         if "gcp_service_account" in secrets_dict:
             creds_dict = secrets_dict["gcp_service_account"]
-            creds = Credentials.from_service_account_info(
-                creds_dict,
-                scopes=["https://www.googleapis.com/auth/drive"]
-            )
-            return build("drive", "v3", credentials=creds)
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPE)
+            return gspread.authorize(creds)
 
-        raise Exception("key.json 또는 st.secrets의 gcp_service_account를 찾지 못했습니다.")
+        raise FileNotFoundError("key.json 또는 st.secrets의 gcp_service_account를 찾지 못했습니다.")
 
     except Exception as e:
-        raise Exception(f"구글 드라이브 인증 실패: {e}")
-
-
-def upload_file_to_drive(uploaded_file, folder_id=None):
-    try:
-        drive_service = get_drive_service()
-
-        file_stream = io.BytesIO(uploaded_file.getvalue())
-
-        file_metadata = {
-            "name": uploaded_file.name
-        }
-
-        if folder_id:
-            file_metadata["parents"] = [folder_id]
-
-        media = MediaIoBaseUpload(
-            file_stream,
-            mimetype=uploaded_file.type if uploaded_file.type else "application/octet-stream",
-            resumable=False
-        )
-
-        uploaded = drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, name, webViewLink, webContentLink"
-        ).execute()
-
-        file_id = uploaded.get("id")
-
-        # 링크로 열 수 있게 공개 읽기 권한 부여
-        drive_service.permissions().create(
-            fileId=file_id,
-            body={
-                "type": "anyone",
-                "role": "reader"
-            }
-        ).execute()
-
-        # 권한 반영 후 열람 링크 생성
-        view_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
-
-        return uploaded.get("name", uploaded_file.name), view_link
-
-    except Exception as e:
-        raise Exception(f"파일 업로드 실패: {e}")
+        raise Exception(f"구글시트 인증 실패: {e}")
 
 
 @st.cache_resource
@@ -990,47 +937,26 @@ def get_drive_service_oauth():
     token_path = os.path.join(base_dir, "token.pickle")
     client_secret_path = os.path.join(base_dir, "client_secret.json")
 
-    # =========================
-    # 1. 기존 토큰 불러오기
-    # =========================
+    if not os.path.exists(client_secret_path):
+        raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
+
     if os.path.exists(token_path):
         with open(token_path, "rb") as token:
             creds = pickle.load(token)
 
-    # =========================
-    # 2. 인증 처리
-    # =========================
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # 👉 secrets 우선 사용
-            if "gdrive_json" in st.secrets:
-                creds_dict = st.secrets["gdrive_json"]
-
-                flow = InstalledAppFlow.from_client_config(
-                    creds_dict,
-                    DRIVE_SCOPES
-                )
-            else:
-                # 👉 로컬용
-                if not os.path.exists(client_secret_path):
-                    raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
-
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    client_secret_path,
-                    DRIVE_SCOPES
-                )
-
+            flow = InstalledAppFlow.from_client_secrets_file(
+                client_secret_path,
+                DRIVE_SCOPES
+            )
             creds = flow.run_local_server(port=0)
 
-        # 토큰 저장
         with open(token_path, "wb") as token:
             pickle.dump(creds, token)
 
-    # =========================
-    # 3. 서비스 생성
-    # =========================
     return build("drive", "v3", credentials=creds)
 
 
