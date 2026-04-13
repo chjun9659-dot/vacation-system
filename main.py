@@ -13,7 +13,7 @@ import io
 
 
 # 👉 여기에 넣으세요
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive']
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 
@@ -972,10 +972,13 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
             resumable=False
         )
 
-        uploaded = drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, name"
+        drive_service.permissions().create(
+            fileId=file_id,
+            body={
+                "type": "anyone",
+                "role": "reader"
+            },
+            supportsAllDrives=True   # 🔥 추가
         ).execute()
 
         file_id = uploaded.get("id")
