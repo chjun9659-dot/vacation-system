@@ -8,12 +8,84 @@ from openpyxl import load_workbook
 import shutil
 import os
 import io
-from google_auth_oauthlib.flow import InstalledAppFlow
-import pickle
+from google_auth_oauthlib.flow import Flow
 from oauth2client.service_account import ServiceAccountCredentials
 
 # 👉 여기에 넣으세요
 DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
+def get_oauth_flow():
+    client_config = {
+        "web": {
+            "client_id": st.secrets["google_oauth"]["client_id"],
+            "client_secret": st.secrets["google_oauth"]["client_secret"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [st.secrets["google_oauth"]["redirect_uri"]],
+        }
+    }
+
+    flow = Flow.from_client_config(
+        client_config,
+        scopes=DRIVE_SCOPES
+    )
+    flow.redirect_uri = st.secrets["google_oauth"]["redirect_uri"]
+    return flow
+
+
+def begin_google_drive_oauth():
+    flow = get_oauth_flow()
+
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent"
+    )
+
+    st.session_state["google_oauth_state"] = state
+    st.link_button("👉 구글 드라이브 로그인 / 권한 연결", auth_url)
+
+
+def complete_google_drive_oauth():
+    query_params = st.query_params
+
+    if "code" not in query_params:
+        return False
+
+    code = query_params["code"]
+    state = query_params.get("state", None)
+
+    if isinstance(code, list):
+        code = code[0]
+    if isinstance(state, list):
+        state = state[0]
+
+    saved_state = st.session_state.get("google_oauth_state")
+
+    if saved_state and state and saved_state != state:
+        st.error("OAuth state 오류")
+        return False
+
+    try:
+        flow = get_oauth_flow()
+        flow.fetch_token(code=code)
+
+        creds = flow.credentials
+
+        st.session_state["google_drive_token"] = {
+            "token": creds.token,
+            "refresh_token": creds.refresh_token,
+            "token_uri": creds.token_uri,
+            "client_id": creds.client_id,
+            "client_secret": creds.client_secret,
+            "scopes": creds.scopes,
+        }
+
+        st.query_params.clear()
+        return True
+
+    except Exception as e:
+        st.error(f"OAuth 실패: {e}")
+        return False
 
 st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 
@@ -904,7 +976,6 @@ SCOPE = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 
 @st.cache_resource
@@ -924,41 +995,33 @@ def get_gspread_client():
 
     except Exception as e:
         raise Exception(f"구글시트 인증 실패: {e}")
-
-
 @st.cache_resource
 def get_drive_service():
-    creds = None
+    if "google_drive_token" not in st.session_state:
+        return None
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    token_path = os.path.join(base_dir, "token.pickle")
-    client_secret_path = os.path.join(base_dir, "client_secret.json")
+    from google.oauth2.credentials import Credentials
 
-    if not os.path.exists(client_secret_path):
-        raise Exception(f"client_secret.json 파일을 찾지 못했습니다: {client_secret_path}")
+    token_info = st.session_state["google_drive_token"]
 
-    if os.path.exists(token_path):
-        with open(token_path, "rb") as token:
-            creds = pickle.load(token)
-
-    if not creds or not getattr(creds, "valid", False):
-        flow = InstalledAppFlow.from_client_secrets_file(
-            client_secret_path,
-            DRIVE_SCOPES
-        )
-        creds = flow.run_local_server(port=0)
-
-        with open(token_path, "wb") as token:
-            pickle.dump(creds, token)
+    creds = Credentials(
+        token=token_info["token"],
+        refresh_token=token_info.get("refresh_token"),
+        token_uri=token_info["token_uri"],
+        client_id=token_info["client_id"],
+        client_secret=token_info["client_secret"],
+        scopes=token_info["scopes"],
+    )
 
     return build("drive", "v3", credentials=creds)
-
-
 
 def upload_file_to_drive(uploaded_file, folder_id=None):
     try:
         drive_service = get_drive_service()
 
+        if drive_service is None:
+            raise Exception("구글 로그인 먼저 해주세요")
+        
         file_bytes = uploaded_file.getvalue()
         file_stream = io.BytesIO(file_bytes)
 
@@ -1935,6 +1998,12 @@ def inspection_page():
     )
 
     show_inspection_flash()
+    
+    if "oauth_done" not in st.session_state:
+        if complete_google_drive_oauth():
+            st.session_state["oauth_done"] = True
+            st.success("로그인 완료!")
+            st.rerun()
 
     df = load_inspection_data()
     df = normalize_inspection_df(df)
@@ -2036,6 +2105,14 @@ def inspection_page():
             note = st.text_input("비고", key=f"note_{form_ver}")
 
             st.markdown("#### 첨부파일")
+            
+            # 로그인 상태 확인
+            if "google_drive_token" not in st.session_state:
+                st.warning("⚠️ 첨부파일 업로드하려면 구글 로그인 필요")
+                begin_google_drive_oauth()
+            else:
+                st.success("✅ 구글 드라이브 연결됨")
+                
             uploaded_file = st.file_uploader(
                 "실사 관련 파일 업로드",
                 type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "doc", "docx"],
