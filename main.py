@@ -13,7 +13,7 @@ import io
 
 
 # 👉 여기에 넣으세요
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive']
 
 st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 
@@ -904,7 +904,7 @@ SCOPE = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
+DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive']
 
 
 @st.cache_resource
@@ -957,7 +957,8 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
     try:
         drive_service = get_drive_service()
 
-        file_stream = io.BytesIO(uploaded_file.getvalue())
+        file_bytes = uploaded_file.getvalue()
+        file_stream = io.BytesIO(file_bytes)
 
         file_metadata = {
             "name": uploaded_file.name
@@ -969,17 +970,21 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
         media = MediaIoBaseUpload(
             file_stream,
             mimetype=uploaded_file.type if uploaded_file.type else "application/octet-stream",
-            resumable=False
+            resumable=True
         )
 
-        uploaded = drive_service.files().create(
+        request = drive_service.files().create(
             body=file_metadata,
             media_body=media,
             fields="id, name",
             supportsAllDrives=True
-        ).execute()
+        )
 
-        file_id = uploaded.get("id")
+        response = None
+        while response is None:
+            status, response = request.next_chunk(num_retries=3)
+
+        file_id = response.get("id")
         if not file_id:
             raise Exception("업로드는 되었지만 file_id를 받지 못했습니다.")
 
@@ -990,11 +995,11 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
                 "role": "reader"
             },
             supportsAllDrives=True
-        ).execute()
+        ).execute(num_retries=3)
 
         view_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
 
-        return uploaded.get("name", uploaded_file.name), view_link
+        return response.get("name", uploaded_file.name), view_link
 
     except Exception as e:
         raise Exception(f"파일 업로드 실패: {e}")
@@ -2049,7 +2054,7 @@ def inspection_page():
                         try:
                             attachment_name, attachment_link = upload_file_to_drive(
                                 uploaded_file,
-                                folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
+                                folder_id="13W2N1v9IBiuZEstmTrvt57Zg8XQiHt7J"
                             )
                         except Exception as e:
                             st.error(str(e))
