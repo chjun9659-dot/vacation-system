@@ -972,24 +972,24 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
             resumable=False
         )
 
+        uploaded = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, name",
+            supportsAllDrives=True
+        ).execute()
+
+        file_id = uploaded.get("id")
+        if not file_id:
+            raise Exception("업로드는 되었지만 file_id를 받지 못했습니다.")
+
         drive_service.permissions().create(
             fileId=file_id,
             body={
                 "type": "anyone",
                 "role": "reader"
             },
-            supportsAllDrives=True   # 🔥 추가
-        ).execute()
-
-        file_id = uploaded.get("id")
-
-        # 링크 열람 가능 권한 부여
-        drive_service.permissions().create(
-            fileId=file_id,
-            body={
-                "type": "anyone",
-                "role": "reader"
-            }
+            supportsAllDrives=True
         ).execute()
 
         view_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
