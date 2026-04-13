@@ -1417,9 +1417,14 @@ JATU_OPTIONS = ["", "있음", "없음"]
 CONTRACT_OPTIONS = ["대기", "계약", "미계약"]
 
 
+@st.cache_resource
 def get_inspection_sheet():
     client = get_gspread_client()
-    spreadsheet = client.open(INSPECTION_SHEET_NAME)
+
+    # 실사관리 스프레드시트 URL 또는 ID로 직접 연결
+    spreadsheet = client.open_by_key("1tvS8BTU__80SAHkPhDeNJX_etfMD-kYIVYbBFRTw0qQ")
+
+    # 실제 작업 시트명
     worksheet = spreadsheet.worksheet("실사복구")
     return worksheet
 
