@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime, date, timedelta
@@ -10,10 +8,9 @@ from openpyxl import load_workbook
 import shutil
 import os
 import io
-import pickle
 from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-
+import pickle
+from oauth2client.service_account import ServiceAccountCredentials
 
 # 👉 여기에 넣으세요
 DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -930,7 +927,7 @@ def get_gspread_client():
 
 
 @st.cache_resource
-def get_drive_service_oauth():
+def get_drive_service():
     creds = None
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -944,15 +941,12 @@ def get_drive_service_oauth():
         with open(token_path, "rb") as token:
             creds = pickle.load(token)
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                client_secret_path,
-                DRIVE_SCOPES
-            )
-            creds = flow.run_local_server(port=0)
+    if not creds or not getattr(creds, "valid", False):
+        flow = InstalledAppFlow.from_client_secrets_file(
+            client_secret_path,
+            DRIVE_SCOPES
+        )
+        creds = flow.run_local_server(port=0)
 
         with open(token_path, "wb") as token:
             pickle.dump(creds, token)
@@ -960,43 +954,59 @@ def get_drive_service_oauth():
     return build("drive", "v3", credentials=creds)
 
 
+
 def upload_file_to_drive(uploaded_file, folder_id=None):
     try:
-        drive_service = get_drive_service_oauth()
+        drive_service = get_drive_service()
 
-        file_stream = io.BytesIO(uploaded_file.getvalue())
-        file_metadata = {"name": uploaded_file.name}
+        file_bytes = uploaded_file.getvalue()
+        file_stream = io.BytesIO(file_bytes)
+
+        file_metadata = {
+            "name": uploaded_file.name
+        }
 
         if folder_id:
             file_metadata["parents"] = [folder_id]
 
         media = MediaIoBaseUpload(
             file_stream,
-            mimetype=uploaded_file.type,
-            resumable=False
+            mimetype=uploaded_file.type if uploaded_file.type else "application/octet-stream",
+            resumable=True
         )
 
-        uploaded = drive_service.files().create(
+        request = drive_service.files().create(
             body=file_metadata,
             media_body=media,
-            fields="id, name, webViewLink"
-        ).execute()
+            fields="id, name",
+            supportsAllDrives=True
+        )
 
-        file_id = uploaded.get("id")
+        response = None
+        while response is None:
+            status, response = request.next_chunk(num_retries=3)
 
-        # 첨부파일 열람 권한 부여
+        file_id = response.get("id")
+        if not file_id:
+            raise Exception("업로드는 되었지만 file_id를 받지 못했습니다.")
+
         drive_service.permissions().create(
             fileId=file_id,
             body={
                 "type": "anyone",
                 "role": "reader"
-            }
-        ).execute()
+            },
+            supportsAllDrives=True
+        ).execute(num_retries=3)
 
-        return uploaded.get("name", uploaded_file.name), uploaded.get("webViewLink", "")
+        view_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+
+        return response.get("name", uploaded_file.name), view_link
 
     except Exception as e:
         raise Exception(f"파일 업로드 실패: {e}")
+
+
 @st.cache_resource
 def get_vacation_sheet():
     client = get_gspread_client()
@@ -2047,7 +2057,7 @@ def inspection_page():
                         try:
                             attachment_name, attachment_link = upload_file_to_drive(
                                 uploaded_file,
-                                folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
+                                folder_id="13W2N1v9IBiuZEstmTrvt57Zg8XQiHt7J"
                             )
                         except Exception as e:
                             st.error(str(e))
@@ -2754,7 +2764,7 @@ def inspection_page():
                             try:
                                 new_attachment_name, new_attachment_link = upload_file_to_drive(
                                     edit_uploaded_file,
-                                    folder_id="1_TVqakggj2P-0ZnVLgEyCqjiqnxAf-nr"
+                                    folder_id="13W2N1v9IBiuZEstmTrvt57Zg8XQiHt7J"
                                 )
                                 save_df.loc[view_idx, "첨부파일명"] = new_attachment_name
                                 save_df.loc[view_idx, "첨부파일링크"] = new_attachment_link
