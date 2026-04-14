@@ -1668,6 +1668,41 @@ def maintenance_page():
 
     st.markdown('<div class="erp-page-title">아이센서 유지보수관리 프로그램</div>', unsafe_allow_html=True)
     st.markdown('<div class="erp-page-desc">유지보수 계약등록, 월별 청구/수금, 미수금 관리</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .maintenance-alert-box {
+        border-radius: 14px;
+        padding: 14px 18px;
+        margin: 8px 0 18px 0;
+        font-size: 15px;
+        font-weight: 600;
+    }
+    .maintenance-alert-danger {
+        background: #fff1f2;
+        border: 1px solid #fecdd3;
+        color: #9f1239;
+    }
+    .maintenance-alert-warning {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        color: #92400e;
+    }
+    .maintenance-guide-box {
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 14px 18px;
+        margin: 10px 0 18px 0;
+        color: #334155;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+    .section-gap {
+        margin-top: 18px;
+        margin-bottom: 18px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     try:
         df = load_maintenance_data()
@@ -1702,6 +1737,25 @@ def maintenance_page():
     c4.metric("전체 계약금액", format_currency(total_amount))
     c5.metric("전체 미수금", format_currency(total_unpaid))
     c6.metric("60일 내 종료예정", expiring_count)
+    if total_unpaid > 0:
+        st.markdown(
+            f'<div class="maintenance-alert-box maintenance-alert-danger">⚠️ 현재 미수금 총액: {format_currency(total_unpaid)} 원</div>',
+            unsafe_allow_html=True
+        )
+
+    if expiring_count > 0:
+        st.markdown(
+            f'<div class="maintenance-alert-box maintenance-alert-warning">⏰ 60일 이내 종료 예정 계약이 {expiring_count}건 있습니다.</div>',
+            unsafe_allow_html=True
+        )
+
+    st.markdown("""
+    <div class="maintenance-guide-box">
+    • 유지보수 계약 등록 → 월별 청구 생성 → 청구/수금 처리 순서로 사용하시면 됩니다.<br>
+    • 미수금이 있는 건은 월별 청구/수금 현황에서 빨간색으로 표시됩니다.<br>
+    • 계약 종료 예정 건은 별도 섹션에서 빠르게 확인할 수 있습니다.
+    </div>
+    """, unsafe_allow_html=True)
 
     st.divider()
 
@@ -1774,7 +1828,7 @@ def maintenance_page():
                     st.rerun()
 
     st.divider()
-
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("🧾 2. 월별 청구 생성", expanded=False):
         g1, g2 = st.columns(2)
         gen_year = g1.number_input("청구 생성 연도", min_value=2024, max_value=2100, value=date.today().year, step=1, key="mt_gen_year")
@@ -1796,7 +1850,7 @@ def maintenance_page():
                 st.rerun()
 
     st.divider()
-
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("💰 3. 월별 청구/수금 처리", expanded=False):
         if pay_df.empty:
             st.info("생성된 청구자료가 없습니다.")
@@ -1859,7 +1913,7 @@ def maintenance_page():
                     st.rerun()
 
     st.divider()
-
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("📋 4. 월별 청구/수금 현황", expanded=False):
         f1, f2, f3 = st.columns(3)
         filter_year = f1.number_input("조회 연도", min_value=2024, max_value=2100, value=date.today().year, step=1, key="mt_filter_year")
@@ -1913,7 +1967,7 @@ def maintenance_page():
             st.dataframe(styled_df, use_container_width=True, hide_index=True) 
 
     st.divider()
-
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("📄 5. 계약 현황", expanded=False):
         f1, f2, f3 = st.columns(3)
         region_filter = f1.selectbox(
@@ -1964,7 +2018,7 @@ def maintenance_page():
             )
 
     st.divider()
-
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("📅 5-1. 계약 종료 예정", expanded=False):
         soon_df = get_contract_expiring_soon(df, within_days=60)
 
@@ -1979,9 +2033,9 @@ def maintenance_page():
             ].copy()
 
             st.dataframe(display_soon_df, use_container_width=True, hide_index=True)
-            
-    st.divider()        
 
+    st.divider()        
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("🔍 6. 상세 보기", expanded=False):
         if df.empty:
             st.info("조회할 계약이 없습니다.")
@@ -2037,7 +2091,7 @@ def maintenance_page():
                 )
 
     st.divider()
-
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("✏️ 7. 계약 수정", expanded=False):
         if df.empty:
             st.info("수정할 계약이 없습니다.")
@@ -2137,7 +2191,7 @@ def maintenance_page():
                     st.rerun()
 
     st.divider()
-
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
     with st.expander("🗑️ 8. 계약 삭제", expanded=False):
         if df.empty:
             st.info("삭제할 계약이 없습니다.")
@@ -2652,6 +2706,17 @@ def dashboard_page():
     # 데이터 로드
     # -------------------------------------------------
     try:
+        mt_df = load_maintenance_data()
+    except Exception as e:
+        st.error(f"유지보수 데이터 로드 실패: {e}")
+        mt_df = pd.DataFrame(columns=MAINTENANCE_COLUMNS)
+
+    try:
+        mt_pay_df = load_maintenance_payment_data()
+    except Exception as e:
+        st.error(f"유지보수 수금 데이터 로드 실패: {e}")
+        mt_pay_df = pd.DataFrame(columns=MAINTENANCE_PAYMENT_COLUMNS)
+    try:
         insp_df = load_inspection_data()
         insp_df = normalize_inspection_df(insp_df)
     except Exception as e:
@@ -2670,6 +2735,12 @@ def dashboard_page():
         st.error(f"연차 데이터 로드 실패: {e}")
         vac_df = pd.DataFrame()
 
+    try:
+        mt_pay_df = load_maintenance_payment_data()
+    except Exception as e:
+        st.error(f"유지보수 수금 데이터 로드 실패: {e}")
+        mt_pay_df = pd.DataFrame(columns=MAINTENANCE_PAYMENT_COLUMNS)
+
     # -------------------------------------------------
     # 공통 전처리
     # -------------------------------------------------
@@ -2687,20 +2758,120 @@ def dashboard_page():
             if col in vac_df.columns:
                 vac_df[col] = pd.to_numeric(vac_df[col], errors="coerce").fillna(0)
 
+    if not mt_df.empty:
+        mt_df["계약시작일_dt"] = pd.to_datetime(mt_df["계약시작일"], errors="coerce")
+        mt_df["계약종료일_dt"] = pd.to_datetime(mt_df["계약종료일"], errors="coerce")
+        mt_df["총계약금액"] = pd.to_numeric(mt_df["총계약금액"], errors="coerce").fillna(0)
+        mt_df["수량"] = pd.to_numeric(mt_df["수량"], errors="coerce").fillna(0)
+
+    if not mt_pay_df.empty:
+        mt_pay_df["청구금액"] = pd.to_numeric(mt_pay_df["청구금액"], errors="coerce").fillna(0)
+        mt_pay_df["미수금"] = pd.to_numeric(mt_pay_df["미수금"], errors="coerce").fillna(0)
+        mt_pay_df["기준년월"] = mt_pay_df["기준년월"].astype(str).str.strip()
+
+    # -------------------------------------------------
+    # 유지보수 KPI
+    # -------------------------------------------------
+
+    st.markdown("### 🧾 유지보수 현황")
+
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("전체 계약", total_mt_contracts)
+    m2.metric("진행중 계약", active_mt_contracts)
+    m3.metric("총 수량", total_mt_qty)
+    m4.metric("전체 계약금액", format_currency(total_mt_amount))
+    m5.metric("전체 미수금", format_currency(total_mt_unpaid))
+    m6.metric("수금률", f"{mt_collection_rate}%")
+    mt_expiring_df = get_contract_expiring_soon(mt_df, within_days=60)
+    mt_expiring_count = len(mt_expiring_df)
+
+    if total_mt_unpaid > 0:
+        st.error(f"⚠️ 유지보수 미수금: {format_currency(total_mt_unpaid)} 원")
+
+    if mt_expiring_count > 0:
+        st.warning(f"⏰ 60일 이내 종료 예정 계약: {mt_expiring_count}건")
+
+    st.markdown("### 📈 월별 유지보수 매출 / 미수금 추이")
+
+    if mt_pay_df.empty:
+        st.info("유지보수 수금 데이터가 없습니다.")
+    else:
+        monthly_summary = mt_pay_df.groupby("기준년월", dropna=False).agg(
+            청구금액합계=("청구금액", "sum"),
+            미수금합계=("미수금", "sum")
+        ).reset_index()
+
+        monthly_summary = monthly_summary.sort_values("기준년월")
+
+        if not monthly_summary.empty:
+            chart_df = monthly_summary.set_index("기준년월")[["청구금액합계", "미수금합계"]]
+            st.line_chart(chart_df, use_container_width=True)
+        else:
+            st.info("월별 차트 데이터가 없습니다.")
+
+    st.markdown("### 🏆 담당자별 유지보수 매출 순위")
+
+    if mt_pay_df.empty:
+        st.info("유지보수 수금 데이터가 없습니다.")
+    else:
+        manager_sales_df = mt_pay_df.groupby("영업담당자", dropna=False).agg(
+            청구금액합계=("청구금액", "sum"),
+            미수금합계=("미수금", "sum")
+        ).reset_index()
+
+        manager_sales_df["영업담당자"] = manager_sales_df["영업담당자"].astype(str).replace("", "미지정")
+        manager_sales_df = manager_sales_df.sort_values("청구금액합계", ascending=False)
+
+        if not manager_sales_df.empty:
+            show_manager_df = manager_sales_df.copy()
+            show_manager_df["청구금액합계"] = show_manager_df["청구금액합계"].apply(format_currency)
+            show_manager_df["미수금합계"] = show_manager_df["미수금합계"].apply(format_currency)
+
+            st.dataframe(show_manager_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("담당자별 데이터가 없습니다.")
+
+    st.markdown("### ⏰ 유지보수 종료 예정 계약")
+
+    if mt_expiring_df.empty:
+        st.info("60일 이내 종료 예정 계약이 없습니다.")
+    else:
+        show_expiring_df = mt_expiring_df[
+            ["코드번호", "단지명", "지역", "영업담당자", "계약종료일", "청구주기", "비고"]
+        ].copy()
+
+        st.dataframe(show_expiring_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### 💰 유지보수 미수금 상세")
+
+    if mt_pay_df.empty:
+        st.info("유지보수 수금 데이터가 없습니다.")
+    else:
+        unpaid_dashboard_df = mt_pay_df[
+            mt_pay_df["입금여부"].astype(str).str.strip() != "입금완료"
+        ].copy()
+
+        if unpaid_dashboard_df.empty:
+            st.info("현재 미수금이 없습니다.")
+        else:
+            unpaid_dashboard_df = unpaid_dashboard_df[
+                ["기준년월", "코드번호", "단지명", "청구금액", "입금여부", "미수금", "영업담당자", "비고"]
+            ].copy()
+
+            display_unpaid_df = unpaid_dashboard_df.copy()
+            display_unpaid_df["청구금액"] = display_unpaid_df["청구금액"].apply(format_currency)
+            display_unpaid_df["미수금"] = display_unpaid_df["미수금"].apply(format_currency)
+
+            styled_unpaid_df = display_unpaid_df.style.map(
+                style_unpaid_amount,
+                subset=["미수금"]
+            )
+
+            st.dataframe(styled_unpaid_df, use_container_width=True, hide_index=True)
+
     # -------------------------------------------------
     # 상단 요약 KPI
     # -------------------------------------------------
-    total_requests = len(insp_df)
-    total_contracts = len(insp_df[insp_df["계약여부"] == "계약"]) if not insp_df.empty else 0
-    total_completed_inspection = len(insp_df[insp_df["진행상태"] == "실사완료"]) if not insp_df.empty else 0
-
-    conversion_all = round((total_contracts / total_requests) * 100, 1) if total_requests > 0 else 0.0
-    conversion_done = round((total_contracts / total_completed_inspection) * 100, 1) if total_completed_inspection > 0 else 0.0
-
-    total_schedule = len(sch_df)
-    total_schedule_done = len(sch_df[sch_df["상태"] == "완료"]) if not sch_df.empty else 0
-
-    total_staff = len(vac_df) if not vac_df.empty else 0
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("전체 실사요청", total_requests)
@@ -2711,6 +2882,68 @@ def dashboard_page():
     c6.metric("전체 직원 수", total_staff)
 
     st.divider()
+
+    # -------------------------------------------------
+    # 유지보수 KPI
+    # -------------------------------------------------
+
+    st.markdown("### 🧾 유지보수 현황")
+
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("전체 계약", total_mt_contracts)
+    m2.metric("진행중 계약", active_mt_contracts)
+    m3.metric("총 수량", total_mt_qty)
+    m4.metric("전체 계약금액", format_currency(total_mt_amount))
+    m5.metric("전체 미수금", format_currency(total_mt_unpaid))
+    m6.metric("수금률", f"{mt_collection_rate}%")
+
+    if total_mt_unpaid > 0:
+        st.error(f"⚠️ 유지보수 미수금: {format_currency(total_mt_unpaid)} 원")
+
+    if mt_expiring_count > 0:
+        st.warning(f"⏰ 60일 이내 종료 예정 계약: {mt_expiring_count}건")
+
+    st.markdown("### 📈 월별 유지보수 매출 / 미수금 추이")
+
+    if mt_pay_df.empty:
+        st.info("유지보수 수금 데이터가 없습니다.")
+    else:
+        monthly_summary = mt_pay_df.groupby("기준년월", dropna=False).agg(
+            청구금액합계=("청구금액", "sum"),
+            미수금합계=("미수금", "sum")
+        ).reset_index()
+
+        monthly_summary = monthly_summary.sort_values("기준년월")
+
+        if not monthly_summary.empty:
+            chart_df = monthly_summary.set_index("기준년월")[["청구금액합계", "미수금합계"]]
+            st.line_chart(chart_df, use_container_width=True)
+        else:
+            st.info("월별 차트 데이터가 없습니다.")    
+
+    st.markdown("### 🏆 담당자별 유지보수 매출 순위")
+
+    if mt_pay_df.empty:
+        st.info("유지보수 수금 데이터가 없습니다.")
+    else:
+        manager_sales_df = mt_pay_df.groupby("영업담당자", dropna=False).agg(
+            청구금액합계=("청구금액", "sum"),
+            미수금합계=("미수금", "sum")
+        ).reset_index()
+
+        manager_sales_df["영업담당자"] = manager_sales_df["영업담당자"].astype(str).replace("", "미지정")
+        manager_sales_df = manager_sales_df.sort_values("청구금액합계", ascending=False)
+
+        if not manager_sales_df.empty:
+            show_manager_df = manager_sales_df.copy()
+            show_manager_df["청구금액합계"] = show_manager_df["청구금액합계"].apply(format_currency)
+            show_manager_df["미수금합계"] = show_manager_df["미수금합계"].apply(format_currency)
+
+            st.dataframe(show_manager_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("담당자별 데이터가 없습니다.")        
+    st.markdown("### ⏰ 유지보수 종료 예정 계약")
+
 
     # -------------------------------------------------
     # 1. 실사 통계
