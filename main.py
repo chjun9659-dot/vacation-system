@@ -229,11 +229,24 @@ def clean_text(value):
 
 
 def format_display_date(value):
-    if pd.isna(value) or str(value).strip() == "" or str(value).strip().lower() == "none":
+    if pd.isna(value):
         return ""
-    if isinstance(value, (pd.Timestamp, datetime)):
-        return value.strftime("%Y-%m-%d")
-    return str(value).strip()
+
+    text = str(value).strip()
+    if text == "" or text.lower() == "none":
+        return ""
+
+    # 이미 문자열이면 최대한 원본 유지
+    # 2025-05-15 00:00:00 -> 2025-05-15
+    if "00:00:00" in text:
+        text = text.replace(" 00:00:00", "")
+
+    # Timestamp/날짜형으로 정상 변환 가능한 경우만 포맷
+    parsed = pd.to_datetime(text, errors="coerce")
+    if pd.isna(parsed):
+        return text
+
+    return parsed.strftime("%Y-%m-%d")
 
 
 def format_leave_date(use_date, leave_type):
@@ -428,17 +441,21 @@ def load_vacation_data():
     sheet = get_vacation_sheet()
     values = sheet.get_all_values()
 
+    # 현재 구글 연차관리 시트 구조:
+    # 1행 = 실제 헤더 / 2행부터 데이터
     if not values or len(values) < 2:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=[
+            "이름", "입사일", "기산시작일", "기산종료일",
+            "근속년수", "발생 연차", "사용 연차", "잔여 연차", *USE_COLS
+        ])
 
-    headers = [str(h).strip() for h in values[0]]
+    raw_headers = [str(x).strip() for x in values[0]]
     rows = values[1:]
 
-    # 빈 헤더 보정
     fixed_headers = []
     used = {}
 
-    for i, h in enumerate(headers):
+    for i, h in enumerate(raw_headers):
         if h == "":
             h = f"빈컬럼{i+1}"
 
@@ -446,24 +463,32 @@ def load_vacation_data():
             used[h] += 1
             h = f"{h}_{used[h]}"
         else:
-            used[h] = 1
+            used[h] = 0
 
         fixed_headers.append(h)
 
     df = pd.DataFrame(rows, columns=fixed_headers)
+    df.columns = [str(c).strip() for c in df.columns]
 
-    # 공백행 제거
-    if "이름" in df.columns:
-        df = df[df["이름"].astype(str).str.strip() != ""].copy()
+    required_cols = [
+        "이름", "입사일", "기산시작일", "기산종료일",
+        "근속년수", "발생 연차", "사용 연차", "잔여 연차"
+    ]
 
-    number_cols = ["발생 연차", "사용 연차", "잔여 연차"]
-    for col in number_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(float)
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = ""
 
     for col in USE_COLS:
         if col not in df.columns:
-            df[col] = None
+            df[col] = ""
+
+    df = df[df["이름"].astype(str).str.strip() != ""].copy()
+
+    for col in ["발생 연차", "사용 연차", "잔여 연차"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(float)
+
+    for col in USE_COLS:
         df[col] = df[col].astype("object")
 
     df = recalculate_vacation_summary(df)
@@ -539,7 +564,7 @@ def vacation_page():
             df = recalculate_vacation_summary(df)
             save_vacation_data(df)
             st.cache_data.clear()
-            st.success(f"{leave_type} 등록 완료!")
+            st.success("연차 수치 재정리 완료!")
             st.rerun()
 
     with tool_col3:
@@ -631,7 +656,7 @@ def vacation_page():
 
                     save_vacation_data(df)
                     st.cache_data.clear()
-                    st.success(f"{leave_type} 등록 완료!")
+                    st.success("연차 수치 재정리 완료!")
                     st.rerun()
 
     with st.expander("🗂️ 선택 직원 사용일 내역", expanded=False):
@@ -728,7 +753,7 @@ def vacation_page():
                         "입사일": pd.to_datetime(hire_date),
                         "기산시작일": pd.to_datetime(start_date),
                         "기산종료일": pd.to_datetime(end_date),
-                        "근속년수\n(기산일 기준)": service_years,
+                        "근속년수": service_years,
                         "발생 연차": float(auto_leave_days),
                         "사용 연차": 0.0,
                         "잔여 연차": float(auto_leave_days),
@@ -741,7 +766,7 @@ def vacation_page():
 
                     save_vacation_data(df)
                     st.cache_data.clear()
-                    st.success(f"{leave_type} 등록 완료!")
+                    st.success("연차 수치 재정리 완료!")
                     st.rerun()
 
         st.markdown("---")
@@ -810,7 +835,7 @@ def vacation_page():
                             df.at[idx, "입사일"] = str(hire_date)
                             df.at[idx, "기산시작일"] = str(start_date)
                             df.at[idx, "기산종료일"] = str(end_date)
-                            df.at[idx, "근속년수\n(기산일 기준)"] = int(service_years)
+                            df.at[idx, "근속년수"] = int(service_years)
                             df.at[idx, "발생 연차"] = float(new_total)
                             df.at[idx, "사용 연차"] = float(new_used)
                             df.at[idx, "잔여 연차"] = float(new_remain)
@@ -839,7 +864,7 @@ def vacation_page():
                 else:
                     save_vacation_data(df)
                     st.cache_data.clear()
-                    st.success(f"{leave_type} 등록 완료!")
+                    st.success(f"{delete_name} 직원 삭제 완료!")
                     st.rerun()
 
     with st.expander("📅 월별 연차 통계", expanded=False):
@@ -876,7 +901,7 @@ def vacation_page():
 
     with st.expander("📋 전체 연차 현황", expanded=False):
         show_cols = [
-            "이름", "입사일", "기산시작일", "기산종료일", "근속년수\n(기산일 기준)",
+            "이름", "입사일", "기산시작일", "기산종료일", "근속년수",
             "발생 연차", "사용 연차", "잔여 연차",
             "사용일1", "사용일2", "사용일3", "사용일4", "사용일5", "사용일6", "사용일7"
         ]
@@ -885,7 +910,7 @@ def vacation_page():
 
         for col in ["입사일", "기산시작일", "기산종료일"]:
             if col in display_df.columns:
-                display_df[col] = pd.to_datetime(display_df[col], errors="coerce").dt.strftime("%Y-%m-%d")
+                display_df[col] = display_df[col].apply(format_display_date)
 
         for col in USE_COLS:
             if col in display_df.columns:
@@ -941,6 +966,12 @@ def get_gspread_client():
 
     except Exception as e:
         raise Exception(f"구글시트 인증 실패: {e}")
+    
+@st.cache_resource
+def get_vacation_sheet():
+    client = get_gspread_client()
+    sheet = client.open("연차관리").worksheet("시트1")
+    return sheet 
 
 
 @st.cache_resource
@@ -1024,33 +1055,48 @@ def upload_file_to_drive(uploaded_file, folder_id=None):
         raise Exception(f"파일 업로드 실패: {e}")
 
 
-@st.cache_resource
-def get_vacation_sheet():
-    client = get_gspread_client()
-    sheet = client.open("연차관리").sheet1
-    return sheet
-
-
 def save_vacation_data(df):
     sheet = get_vacation_sheet()
-
     save_df = df.copy()
 
     if "row_id" in save_df.columns:
         save_df = save_df.drop(columns=["row_id"])
 
-    save_df.columns = [str(col).strip() for col in save_df.columns]
+    all_values = sheet.get_all_values()
+    if len(all_values) < 1:
+        raise Exception("연차관리 시트의 1행 헤더를 찾지 못했습니다.")
+
+    real_headers = [str(x).strip() for x in all_values[0]]
+    real_headers = [x for x in real_headers if x != ""]
+
+    for col in real_headers:
+        if col not in save_df.columns:
+            save_df[col] = ""
+
+    save_df = save_df[real_headers].copy()
     save_df = save_df.where(pd.notnull(save_df), "")
 
     for col in save_df.columns:
-        save_df[col] = save_df[col].apply(lambda x: "" if x is None else str(x).strip())
+        if col in ["발생 연차", "사용 연차", "잔여 연차", "근속년수"]:
+            save_df[col] = pd.to_numeric(save_df[col], errors="coerce").fillna(0)
+        else:
+            save_df[col] = save_df[col].apply(lambda x: "" if x is None else str(x).strip())
 
-    rows = [save_df.columns.tolist()] + save_df.values.tolist()
+    rows = save_df.values.tolist()
+    start_row = 2
 
-    # ❌ clear 제거
+    if rows:
+        sheet.update(f"A{start_row}", rows)
 
-    # ✅ 안전 방식
-    sheet.update("A1", rows)
+    old_data_rows = max(0, len(all_values) - 1)
+
+    if old_data_rows > len(rows):
+        blank_count = old_data_rows - len(rows)
+        clear_start = start_row + len(rows)
+        empty_rows = [[""] * len(rows[0]) for _ in range(blank_count)]
+        sheet.update(f"A{clear_start}", empty_rows)
+
+    st.cache_data.clear()
 
 # =========================================================
 # 4. 시공 일정 시스템
@@ -2771,104 +2817,34 @@ def dashboard_page():
         mt_pay_df["기준년월"] = mt_pay_df["기준년월"].astype(str).str.strip()
 
     # -------------------------------------------------
-    # 유지보수 KPI
+    # 상단 요약 KPI 계산
     # -------------------------------------------------
 
-    st.markdown("### 🧾 유지보수 현황")
-
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("전체 계약", total_mt_contracts)
-    m2.metric("진행중 계약", active_mt_contracts)
-    m3.metric("총 수량", total_mt_qty)
-    m4.metric("전체 계약금액", format_currency(total_mt_amount))
-    m5.metric("전체 미수금", format_currency(total_mt_unpaid))
-    m6.metric("수금률", f"{mt_collection_rate}%")
-    mt_expiring_df = get_contract_expiring_soon(mt_df, within_days=60)
-    mt_expiring_count = len(mt_expiring_df)
-
-    if total_mt_unpaid > 0:
-        st.error(f"⚠️ 유지보수 미수금: {format_currency(total_mt_unpaid)} 원")
-
-    if mt_expiring_count > 0:
-        st.warning(f"⏰ 60일 이내 종료 예정 계약: {mt_expiring_count}건")
-
-    st.markdown("### 📈 월별 유지보수 매출 / 미수금 추이")
-
-    if mt_pay_df.empty:
-        st.info("유지보수 수금 데이터가 없습니다.")
+    # 1) 실사 KPI
+    if insp_df.empty:
+        total_requests = 0
+        total_contracts = 0
+        conversion_all = 0.0
+        conversion_done = 0.0
     else:
-        monthly_summary = mt_pay_df.groupby("기준년월", dropna=False).agg(
-            청구금액합계=("청구금액", "sum"),
-            미수금합계=("미수금", "sum")
-        ).reset_index()
+        total_requests = len(insp_df)
 
-        monthly_summary = monthly_summary.sort_values("기준년월")
+        total_contracts = len(
+            insp_df[insp_df["계약여부"].astype(str).str.strip() == "계약"]
+        ) if "계약여부" in insp_df.columns else 0
 
-        if not monthly_summary.empty:
-            chart_df = monthly_summary.set_index("기준년월")[["청구금액합계", "미수금합계"]]
-            st.line_chart(chart_df, use_container_width=True)
-        else:
-            st.info("월별 차트 데이터가 없습니다.")
+        total_done = len(
+            insp_df[insp_df["진행상태"].astype(str).str.strip() == "실사완료"]
+        ) if "진행상태" in insp_df.columns else 0
 
-    st.markdown("### 🏆 담당자별 유지보수 매출 순위")
+        conversion_all = round((total_contracts / total_requests) * 100, 1) if total_requests > 0 else 0.0
+        conversion_done = round((total_contracts / total_done) * 100, 1) if total_done > 0 else 0.0
 
-    if mt_pay_df.empty:
-        st.info("유지보수 수금 데이터가 없습니다.")
-    else:
-        manager_sales_df = mt_pay_df.groupby("영업담당자", dropna=False).agg(
-            청구금액합계=("청구금액", "sum"),
-            미수금합계=("미수금", "sum")
-        ).reset_index()
+    # 2) 시공 KPI
+    total_schedule = len(sch_df) if not sch_df.empty else 0
 
-        manager_sales_df["영업담당자"] = manager_sales_df["영업담당자"].astype(str).replace("", "미지정")
-        manager_sales_df = manager_sales_df.sort_values("청구금액합계", ascending=False)
-
-        if not manager_sales_df.empty:
-            show_manager_df = manager_sales_df.copy()
-            show_manager_df["청구금액합계"] = show_manager_df["청구금액합계"].apply(format_currency)
-            show_manager_df["미수금합계"] = show_manager_df["미수금합계"].apply(format_currency)
-
-            st.dataframe(show_manager_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("담당자별 데이터가 없습니다.")
-
-    st.markdown("### ⏰ 유지보수 종료 예정 계약")
-
-    if mt_expiring_df.empty:
-        st.info("60일 이내 종료 예정 계약이 없습니다.")
-    else:
-        show_expiring_df = mt_expiring_df[
-            ["코드번호", "단지명", "지역", "영업담당자", "계약종료일", "청구주기", "비고"]
-        ].copy()
-
-        st.dataframe(show_expiring_df, use_container_width=True, hide_index=True)
-
-    st.markdown("### 💰 유지보수 미수금 상세")
-
-    if mt_pay_df.empty:
-        st.info("유지보수 수금 데이터가 없습니다.")
-    else:
-        unpaid_dashboard_df = mt_pay_df[
-            mt_pay_df["입금여부"].astype(str).str.strip() != "입금완료"
-        ].copy()
-
-        if unpaid_dashboard_df.empty:
-            st.info("현재 미수금이 없습니다.")
-        else:
-            unpaid_dashboard_df = unpaid_dashboard_df[
-                ["기준년월", "코드번호", "단지명", "청구금액", "입금여부", "미수금", "영업담당자", "비고"]
-            ].copy()
-
-            display_unpaid_df = unpaid_dashboard_df.copy()
-            display_unpaid_df["청구금액"] = display_unpaid_df["청구금액"].apply(format_currency)
-            display_unpaid_df["미수금"] = display_unpaid_df["미수금"].apply(format_currency)
-
-            styled_unpaid_df = display_unpaid_df.style.map(
-                style_unpaid_amount,
-                subset=["미수금"]
-            )
-
-            st.dataframe(styled_unpaid_df, use_container_width=True, hide_index=True)
+    # 3) 직원 KPI
+    total_staff = len(vac_df) if not vac_df.empty else 0
 
     # -------------------------------------------------
     # 상단 요약 KPI
@@ -2887,6 +2863,44 @@ def dashboard_page():
     # -------------------------------------------------
     # 유지보수 KPI
     # -------------------------------------------------
+    total_mt_contracts = len(mt_df) if not mt_df.empty else 0
+
+    active_mt_contracts = (
+        len(mt_df[mt_df["계약상태"].astype(str).str.strip() == "진행중"])
+        if not mt_df.empty else 0
+    )
+
+    total_mt_qty = (
+        int(pd.to_numeric(mt_df["수량"], errors="coerce").fillna(0).sum())
+        if not mt_df.empty else 0
+    )
+
+    total_mt_amount = (
+        int(pd.to_numeric(mt_df["총계약금액"], errors="coerce").fillna(0).sum())
+        if not mt_df.empty else 0
+    )
+
+    total_mt_unpaid = (
+        int(pd.to_numeric(mt_pay_df["미수금"], errors="coerce").fillna(0).sum())
+        if not mt_pay_df.empty else 0
+    )
+
+    total_mt_claim_amount = (
+        int(pd.to_numeric(mt_pay_df["청구금액"], errors="coerce").fillna(0).sum())
+        if not mt_pay_df.empty else 0
+    )
+
+    total_mt_paid_amount = (
+        total_mt_claim_amount - total_mt_unpaid
+        if total_mt_claim_amount > 0 else 0
+    )
+
+    mt_collection_rate = round(
+        (total_mt_paid_amount / total_mt_claim_amount) * 100, 1
+    ) if total_mt_claim_amount > 0 else 0.0
+
+    mt_expiring_df = get_contract_expiring_soon(mt_df, within_days=60) if not mt_df.empty else pd.DataFrame()
+    mt_expiring_count = len(mt_expiring_df)
 
     st.markdown("### 🧾 유지보수 현황")
 
@@ -3021,6 +3035,20 @@ def dashboard_page():
             st.info("월별 실사/계약 데이터가 없습니다.")
 
     st.divider()
+
+    total_schedule = len(sch_df) if not sch_df.empty else 0
+
+    total_schedule_done = (
+        len(sch_df[sch_df["상태"].astype(str).str.strip() == "완료"])
+        if not sch_df.empty else 0
+    )
+
+    total_schedule_progress = (
+        len(sch_df[sch_df["상태"].astype(str).str.strip() == "진행중"])
+        if not sch_df.empty else 0
+    )
+
+    complete_rate = round((total_schedule_done / total_schedule) * 100, 1) if total_schedule > 0 else 0.0
 
     # -------------------------------------------------
     # 2. 시공 통계
