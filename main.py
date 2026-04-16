@@ -770,7 +770,6 @@ def vacation_page():
                     st.rerun()
 
         st.markdown("---")
-        st.write("현재 컬럼:", list(df.columns))
         st.markdown("## ✏️ 직원 수정")
 
         edit_name = st.selectbox("수정할 직원 선택", names, key="edit_employee_select_unique")
