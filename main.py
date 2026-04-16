@@ -770,6 +770,7 @@ def vacation_page():
                     st.rerun()
 
         st.markdown("---")
+        st.write("현재 컬럼:", list(df.columns))
         st.markdown("## ✏️ 직원 수정")
 
         edit_name = st.selectbox("수정할 직원 선택", names, key="edit_employee_select_unique")
@@ -833,16 +834,23 @@ def vacation_page():
                             if "근속년수" not in df.columns:
                                 df["근속년수"] = ""
 
+                            # 숫자형 정리
+                            df["근속년수"] = pd.to_numeric(df["근속년수"], errors="coerce").fillna(0)
+                            df["근속년수"] = df["근속년수"].astype(int)
+                            
+                            row_pos = df.index.get_loc(idx)
+
                             df.loc[idx, "이름"] = edited_name
                             df.loc[idx, "입사일"] = str(hire_date)
                             df.loc[idx, "기산시작일"] = str(start_date)
                             df.loc[idx, "기산종료일"] = str(end_date)
-                            df.loc[idx, "근속년수"] = int(service_years)
                             df.loc[idx, "발생 연차"] = float(new_total)
                             df.loc[idx, "사용 연차"] = float(new_used)
                             df.loc[idx, "잔여 연차"] = float(new_remain)
-                            df["근속년수"] = pd.to_numeric(df["근속년수"], errors="coerce").fillna(0)
-                            
+
+                            service_col_pos = list(df.columns).index("근속년수")
+                            df.iat[row_pos, service_col_pos] = int(service_years)
+
                             save_vacation_data(df)
                             st.cache_data.clear()
                             st.success("직원 정보 수정 완료!")
