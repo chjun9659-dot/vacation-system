@@ -830,16 +830,19 @@ def vacation_page():
                         if new_remain < 0:
                             st.error("사용 연차가 발생 연차보다 클 수 없습니다.")
                         else:
-                            # loc 대신 at 사용 (단일 셀 수정에 더 안전)
-                            df.at[idx, "이름"] = edited_name
-                            df.at[idx, "입사일"] = str(hire_date)
-                            df.at[idx, "기산시작일"] = str(start_date)
-                            df.at[idx, "기산종료일"] = str(end_date)
-                            df.at[idx, "근속년수"] = int(service_years)
-                            df.at[idx, "발생 연차"] = float(new_total)
-                            df.at[idx, "사용 연차"] = float(new_used)
-                            df.at[idx, "잔여 연차"] = float(new_remain)
+                            if "근속년수" not in df.columns:
+                                df["근속년수"] = ""
 
+                            df.loc[idx, "이름"] = edited_name
+                            df.loc[idx, "입사일"] = str(hire_date)
+                            df.loc[idx, "기산시작일"] = str(start_date)
+                            df.loc[idx, "기산종료일"] = str(end_date)
+                            df.loc[idx, "근속년수"] = int(service_years)
+                            df.loc[idx, "발생 연차"] = float(new_total)
+                            df.loc[idx, "사용 연차"] = float(new_used)
+                            df.loc[idx, "잔여 연차"] = float(new_remain)
+                            df["근속년수"] = pd.to_numeric(df["근속년수"], errors="coerce").fillna(0)
+                            
                             save_vacation_data(df)
                             st.cache_data.clear()
                             st.success("직원 정보 수정 완료!")
