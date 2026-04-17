@@ -407,6 +407,9 @@ def recalculate_vacation_summary(df: pd.DataFrame):
         total_leave = to_number(df.loc[idx, "발생 연차"])
         used_leave = 0.0
 
+        start_date = pd.to_datetime(df.loc[idx, "기산시작일"], errors="coerce")
+        end_date = pd.to_datetime(df.loc[idx, "기산종료일"], errors="coerce")
+
         for col in USE_COLS:
             if col not in df.columns:
                 continue
@@ -420,10 +423,17 @@ def recalculate_vacation_summary(df: pd.DataFrame):
             if text == "" or text.lower() == "none":
                 continue
 
-            if "반차" in text:
-                used_leave += 0.5
+            parsed_date, amount = parse_use_entry(value)
+            if parsed_date is None:
+                continue
+
+            # ✅ 현재 기산구간 안의 사용일만 집계
+            if pd.notna(start_date) and pd.notna(end_date):
+                if start_date.date() <= parsed_date.date() <= end_date.date():
+                    used_leave += amount
             else:
-                used_leave += 1.0
+                # 기산일이 비어 있으면 기존 방식처럼 일단 합산
+                used_leave += amount
 
         remain_leave = total_leave - used_leave
 
