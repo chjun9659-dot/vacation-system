@@ -210,7 +210,7 @@ def home_page():
 VACATION_FILE_PATH = "회사 연차사용.xlsx"
 VACATION_SHEET_NAME = "26년도 연차사용"
 VACATION_BACKUP_DIR = "backup"
-USE_COLS = [f"사용일{i}" for i in range(1, 31)]
+USE_COLS = [f"사용일{i}" for i in range(1, 61)]
 
 
 def get_target_year():
