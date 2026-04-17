@@ -359,6 +359,84 @@ def style_remaining_leave(val):
         return "background-color: #fff3cd; color: #664d03; font-weight: bold;"
     return ""
 
+def render_employee_vacation_cards(df: pd.DataFrame):
+    st.subheader("🪪 직원별 연차 요약 카드")
+
+    if df.empty:
+        st.info("표시할 직원 데이터가 없습니다.")
+        return
+
+    card_df = df.copy()
+
+    for col in ["발생 연차", "사용 연차", "잔여 연차"]:
+        if col not in card_df.columns:
+            card_df[col] = 0
+        card_df[col] = pd.to_numeric(card_df[col], errors="coerce").fillna(0)
+
+    card_df["사용률"] = card_df.apply(
+        lambda row: 0 if float(row["발생 연차"]) <= 0 else round((float(row["사용 연차"]) / float(row["발생 연차"])) * 100, 1),
+        axis=1
+    )
+
+    card_df = card_df.sort_values(by=["잔여 연차", "사용률"], ascending=[True, False]).reset_index(drop=True)
+
+    cols_per_row = 3
+
+    for start in range(0, len(card_df), cols_per_row):
+        row_cols = st.columns(cols_per_row)
+
+        for i in range(cols_per_row):
+            idx = start + i
+            if idx >= len(card_df):
+                row_cols[i].empty()
+                continue
+
+            row = card_df.iloc[idx]
+
+            name = str(row["이름"]).strip()
+            total = float(row["발생 연차"])
+            used = float(row["사용 연차"])
+            remain = float(row["잔여 연차"])
+            rate = float(row["사용률"])
+
+            if remain <= 0:
+                status_text = "🔴 위험"
+                border_color = "#ef4444"
+                bg_color = "#fef2f2"
+            elif remain <= 5:
+                status_text = "🟡 주의"
+                border_color = "#f59e0b"
+                bg_color = "#fffbeb"
+            else:
+                status_text = "🟢 정상"
+                border_color = "#22c55e"
+                bg_color = "#f0fdf4"
+
+            row_cols[i].markdown(
+                f"""
+                <div style="
+                    border: 2px solid {border_color};
+                    background: {bg_color};
+                    border-radius: 14px;
+                    padding: 16px;
+                    margin-bottom: 12px;
+                    min-height: 170px;
+                ">
+                    <div style="font-size:20px; font-weight:800; margin-bottom:10px;">
+                        {name}
+                    </div>
+                    <div style="font-size:15px; line-height:1.9;">
+                        • 발생 연차: <b>{format_leave_number(total)}일</b><br>
+                        • 사용 연차: <b>{format_leave_number(used)}일</b><br>
+                        • 잔여 연차: <b>{format_leave_number(remain)}일</b><br>
+                        • 사용률: <b>{rate}%</b><br>
+                        • 상태: <b>{status_text}</b>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
 
 def format_leave_number(value):
     num = pd.to_numeric(value, errors="coerce")
@@ -665,10 +743,14 @@ def vacation_page():
 
     if remain <= 0:
         st.error("잔여 연차가 없습니다.")
+        
     elif remain <= 5:
-        st.warning("잔여 연차가 5일 이하입니다.")
+            st.warning("잔여 연차가 5일 이하입니다.")
     else:
-        st.success("잔여 연차가 충분합니다.")
+            st.success("잔여 연차가 충분합니다.")
+
+    with st.expander("직원별 연차 요약 카드 (전체 직원)", expanded=False):
+        render_employee_vacation_cards(df)
 
     with st.expander("📝 연차 사용 입력", expanded=False):
         use_date = st.date_input("사용 날짜 선택", datetime.today(), key="vac_use_date_unique")
@@ -973,8 +1055,7 @@ def vacation_page():
         show_cols = [
             "이름", "입사일", "기산시작일", "기산종료일", "근속년수",
             "발생 연차", "사용 연차", "잔여 연차",
-            "사용일1", "사용일2", "사용일3", "사용일4", "사용일5", "사용일6", "사용일7"
-        ]
+        ] + USE_COLS
 
         display_df = df.copy()
 
@@ -990,9 +1071,41 @@ def vacation_page():
         display_df["사용 연차"] = display_df["사용 연차"].apply(format_leave_number)
         display_df["잔여 연차"] = display_df["잔여 연차"].apply(format_leave_number)
 
-        existing_cols = [col for col in show_cols if col in display_df.columns]
-        styled_df = display_df[existing_cols].style.map(style_remaining_leave, subset=["잔여 연차"])
-        st.dataframe(styled_df, use_container_width=True)
+        # 🔹 기본 정보 컬럼
+        basic_cols = [
+            "이름", "입사일", "기산시작일", "기산종료일",
+            "근속년수", "발생 연차", "사용 연차", "잔여 연차"
+        ]
+
+        # 🔹 사용일 컬럼
+        use_cols = USE_COLS
+
+        # 🔹 존재하는 컬럼만 필터
+        basic_cols = [col for col in basic_cols if col in display_df.columns]
+        use_cols = [col for col in use_cols if col in display_df.columns]
+
+        # =========================
+        # 📊 기본 정보 표
+        # =========================
+        st.subheader("📊 기본 연차 정보")
+        basic_df = display_df[basic_cols].copy()
+
+        styled_basic_df = basic_df.style.map(
+            style_remaining_leave,
+            subset=["잔여 연차"]
+        )
+
+        st.dataframe(styled_basic_df, use_container_width=True, height=400)
+
+        # =========================
+        # 📅 사용일 표
+        # =========================
+        st.subheader("📅 연차 사용 이력")
+
+        use_df = display_df[["이름"] + use_cols].set_index("이름")
+
+        st.dataframe(use_df, use_container_width=False, height=600)
+
 
     with st.expander("⬇️ 엑셀 다운로드", expanded=False):
         with open(VACATION_FILE_PATH, "rb") as f:
