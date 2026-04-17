@@ -288,19 +288,41 @@ def calculate_anniversary_period(hire_date, target_year):
 
 
 def calculate_auto_leave_days(hire_date, target_year=None):
-    if target_year is None:
-        target_year = get_target_year()
+    today = date.today()
 
-    start_date, end_date = calculate_anniversary_period(hire_date, target_year)
-    service_years = calculate_service_years(hire_date, start_date)
+    # 1년 되는 날짜
+    try:
+        one_year_anniversary = hire_date.replace(year=hire_date.year + 1)
+    except:
+        one_year_anniversary = hire_date + timedelta(days=365)
 
-    if service_years < 1:
-        months_worked = (start_date.year - hire_date.year) * 12 + (start_date.month - hire_date.month)
-        if start_date.day < hire_date.day:
+    # 🔥 핵심 수정
+    if today < one_year_anniversary:
+        start_date = hire_date
+        end_date = one_year_anniversary - timedelta(days=1)
+        service_years = 0
+
+        # 월차 계산 (1년 미만)
+        months_worked = (today.year - hire_date.year) * 12 + (today.month - hire_date.month)
+        if today.day < hire_date.day:
             months_worked -= 1
+
         months_worked = max(0, min(11, months_worked))
         leave_days = float(months_worked)
+
     else:
+        # 1년 이상
+        try:
+            start_date = hire_date.replace(year=today.year)
+        except:
+            start_date = date(today.year, hire_date.month, hire_date.day - 1)
+
+        end_date = start_date.replace(year=start_date.year + 1) - timedelta(days=1)
+
+        service_years = today.year - hire_date.year
+        if (today.month, today.day) < (hire_date.month, hire_date.day):
+            service_years -= 1
+
         extra_days = max(0, (service_years - 1) // 2)
         leave_days = float(min(25, 15 + extra_days))
 
