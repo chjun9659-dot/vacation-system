@@ -360,7 +360,8 @@ def style_remaining_leave(val):
     return ""
 
 def render_employee_vacation_cards(df: pd.DataFrame):
-    st.subheader("🪪 직원별 연차 요약 카드")
+    st.subheader("직원별 연차 요약 카드")
+    st.caption("전체 직원 기준")
 
     if df.empty:
         st.info("표시할 직원 데이터가 없습니다.")
@@ -380,7 +381,7 @@ def render_employee_vacation_cards(df: pd.DataFrame):
 
     card_df = card_df.sort_values(by=["잔여 연차", "사용률"], ascending=[True, False]).reset_index(drop=True)
 
-    cols_per_row = 3
+    cols_per_row = 4
 
     for start in range(0, len(card_df), cols_per_row):
         row_cols = st.columns(cols_per_row)
