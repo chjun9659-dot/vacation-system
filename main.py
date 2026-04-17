@@ -425,6 +425,27 @@ def recalculate_vacation_summary(df: pd.DataFrame):
 
     return df
 
+def recalculate_all_vacation_data(df: pd.DataFrame):
+    df = df.copy()
+
+    for idx in df.index:
+        hire_date = pd.to_datetime(df.loc[idx, "입사일"], errors="coerce")
+
+        if pd.isna(hire_date):
+            continue
+
+        hire_date = hire_date.date()
+
+        start_date, end_date, service_years, leave_days = calculate_auto_leave_days(hire_date)
+
+        df.loc[idx, "기산시작일"] = str(start_date)
+        df.loc[idx, "기산종료일"] = str(end_date)
+        df.loc[idx, "근속년수"] = int(service_years)
+        df.loc[idx, "발생 연차"] = float(leave_days)
+
+    df = recalculate_vacation_summary(df)
+    return df
+
 def build_monthly_stats(df, target_year, target_month):
     rows = []
     total_count = 0
@@ -583,10 +604,10 @@ def vacation_page():
 
     with tool_col2:
         if st.button("🧮 연차 수치 재정리", use_container_width=True, key="vac_recalc_btn_unique"):
-            df = recalculate_vacation_summary(df)
+            df = recalculate_all_vacation_data(df)
             save_vacation_data(df)
             st.cache_data.clear()
-            st.success("연차 수치 재정리 완료!")
+            st.success("전체 직원 연차 기준 재계산 완료!")
             st.rerun()
 
     with tool_col3:
