@@ -460,7 +460,7 @@ def recalculate_all_vacation_data(df: pd.DataFrame):
         df.loc[idx, "근속년수"] = int(service_years)
         df.loc[idx, "발생 연차"] = float(leave_days)
 
-    df = recalculate_vacation_summary(df)
+    df = recalculate_all_vacation_data(df)
     return df
 
 def build_monthly_stats(df, target_year, target_month):
