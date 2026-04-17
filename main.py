@@ -290,19 +290,24 @@ def calculate_anniversary_period(hire_date, target_year):
 def calculate_auto_leave_days(hire_date, target_year=None):
     today = date.today()
 
-    # 1년 되는 날짜
-    try:
-        one_year_anniversary = hire_date.replace(year=hire_date.year + 1)
-    except:
-        one_year_anniversary = hire_date + timedelta(days=365)
+    def safe_replace_year(d, year):
+        try:
+            return d.replace(year=year)
+        except ValueError:
+            # 2월 29일 보정
+            if d.month == 2 and d.day == 29:
+                return date(year, 2, 28)
+            raise
 
-    # 🔥 핵심 수정
+    # 입사 1주년
+    one_year_anniversary = safe_replace_year(hire_date, hire_date.year + 1)
+
+    # 1년 미만
     if today < one_year_anniversary:
         start_date = hire_date
         end_date = one_year_anniversary - timedelta(days=1)
         service_years = 0
 
-        # 월차 계산 (1년 미만)
         months_worked = (today.year - hire_date.year) * 12 + (today.month - hire_date.month)
         if today.day < hire_date.day:
             months_worked -= 1
@@ -310,14 +315,16 @@ def calculate_auto_leave_days(hire_date, target_year=None):
         months_worked = max(0, min(11, months_worked))
         leave_days = float(months_worked)
 
+    # 1년 이상
     else:
-        # 1년 이상
-        try:
-            start_date = hire_date.replace(year=today.year)
-        except:
-            start_date = date(today.year, hire_date.month, hire_date.day - 1)
+        this_year_anniversary = safe_replace_year(hire_date, today.year)
 
-        end_date = start_date.replace(year=start_date.year + 1) - timedelta(days=1)
+        if today >= this_year_anniversary:
+            start_date = this_year_anniversary
+        else:
+            start_date = safe_replace_year(hire_date, today.year - 1)
+
+        end_date = safe_replace_year(start_date, start_date.year + 1) - timedelta(days=1)
 
         service_years = today.year - hire_date.year
         if (today.month, today.day) < (hire_date.month, hire_date.day):
@@ -879,7 +886,7 @@ def vacation_page():
                             # 숫자형 정리
                             df["근속년수"] = pd.to_numeric(df["근속년수"], errors="coerce").fillna(0)
                             df["근속년수"] = df["근속년수"].astype(int)
-                            
+
                             row_pos = df.index.get_loc(idx)
 
                             df.loc[idx, "이름"] = edited_name
