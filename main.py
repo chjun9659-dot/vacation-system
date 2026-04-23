@@ -1378,6 +1378,26 @@ def schedule_page():
     st.markdown('<div class="erp-page-title">시공 일정 관리 프로그램</div>', unsafe_allow_html=True)
     st.markdown('<div class="erp-page-desc">시공 일정 등록, 수정, 진행 현황 관리</div>', unsafe_allow_html=True)
 
+def schedule_page():
+    render_inspection_common_style()
+
+    st.markdown('<div class="erp-page-title">시공 일정 관리 프로그램</div>', unsafe_allow_html=True)
+    st.markdown('<div class="erp-page-desc">시공 일정 등록, 수정, 진행 현황 관리</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <style>
+    div[data-testid="stMetricValue"] {
+        font-size: 22px !important;
+        font-weight: 700 !important;
+    }
+
+    div[data-testid="stMetricLabel"] {
+        font-size: 12px !important;
+        color: #64748b !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     try:
         df = load_schedule_data()
     except Exception as e:
