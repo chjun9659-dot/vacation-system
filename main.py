@@ -1397,12 +1397,12 @@ def schedule_page():
     }
 
     div[data-testid="stMetric"] {
-    background: #f8fafc;
+    background: #ffffff;  /* 더 선명 */
     padding: 15px;
     border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);            
-}           
+    border: 1.5px solid #cbd5e1;  /* 더 진하게 */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);  /* 그림자 강화 */
+}         
 
     </style>
     """, unsafe_allow_html=True)
