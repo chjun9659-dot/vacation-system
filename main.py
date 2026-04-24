@@ -20,12 +20,27 @@ st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 # =========================================================
 # 0. 로그인 설정
 # =========================================================
-USERS = {
-    "admin": {"password": "1234", "role": "관리자"},
-    "staff": {"password": "1234", "role": "직원"},
-    "시공": {"password": "1234", "role": "시공"},
-    "행정": {"password": "1234", "role": "관리자"},
-}
+@st.cache_data(ttl=60)
+def load_user_data():
+    client = get_gspread_client()
+    sheet = client.open("사용자관리").sheet1
+    data = sheet.get_all_records()
+    df = pd.DataFrame(data)
+
+    required_cols = ["아이디", "비밀번호", "권한", "사용여부", "이름"]
+
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[required_cols].copy()
+
+    for col in required_cols:
+        df[col] = df[col].astype(str).str.strip()
+
+    df = df[df["사용여부"].str.upper() == "Y"].copy()
+
+    return df
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -66,16 +81,28 @@ def login_screen():
         password = st.text_input("비밀번호", type="password")
         submitted = st.form_submit_button("로그인")
 
-        if submitted:
-            username = username.strip()
-            if username in USERS and USERS[username]["password"] == password:
+        try:
+            user_df = load_user_data()
+
+            matched = user_df[
+                (user_df["아이디"] == username) &
+                (user_df["비밀번호"] == password)
+            ]
+
+            if not matched.empty:
+                user = matched.iloc[0]
+
                 st.session_state.logged_in = True
-                st.session_state.username = username
-                st.session_state.role = USERS[username]["role"]
+                st.session_state.username = str(user["이름"]).strip() or username
+                st.session_state.role = str(user["권한"]).strip()
+
                 st.success("로그인 성공!")
                 st.rerun()
             else:
                 st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
+
+        except Exception as e:
+            st.error(f"사용자 정보를 불러오지 못했습니다: {e}")
 
 
 # =========================================================
