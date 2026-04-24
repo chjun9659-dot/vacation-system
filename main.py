@@ -106,6 +106,36 @@ def login_screen():
             except Exception as e:
                 st.error(f"사용자 정보를 불러오지 못했습니다: {e}")
 
+def get_role():
+    return st.session_state.get("role", "")
+
+def is_admin():
+    return get_role() == "관리자"
+
+def is_staff():
+    return get_role() == "직원"
+
+def is_construction():
+    return get_role() == "시공"
+
+def is_office():
+    return get_role() == "행정"
+
+def can_edit_vacation():
+    return is_admin()
+
+def can_edit_schedule():
+    return is_admin() or is_construction()
+
+def can_delete_schedule():
+    return is_admin()
+
+def can_edit_inspection():
+    return is_admin() or is_office()
+
+def can_edit_maintenance():
+    return is_admin() or is_office()               
+
 
 # =========================================================
 # 1. 공통 UI
