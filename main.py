@@ -1136,8 +1136,8 @@ DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
 @st.cache_resource
 def get_gspread_client():
     try:
-        if os.path.exists("key.json"):
-            creds = ServiceAccountCredentials.from_json_keyfile_name("key.json", SCOPE)
+        if os.path.exists("vacation-system/key.json"):
+            creds = ServiceAccountCredentials.from_json_keyfile_name("vacation-system/key.json", SCOPE)
             return gspread.authorize(creds)
 
         secrets_dict = st.secrets.to_dict()
