@@ -748,6 +748,7 @@ def vacation_page():
         st.error(f"연차 파일을 불러오지 못했습니다: {e}")
         return
 
+if can_edit_vacation():
     st.subheader("🛠️ 관리 도구")
 
     tool_col1, tool_col2, tool_col3 = st.columns(3)
@@ -771,6 +772,9 @@ def vacation_page():
             st.write(f"백업 파일 수: {len(backup_files)}")
         else:
             st.write("백업 파일 수: 0")
+
+else:
+    st.info("연차 관리 도구는 관리자만 사용할 수 있습니다.")
 
     st.subheader("👤 직원 선택")
 
@@ -812,6 +816,7 @@ def vacation_page():
     with st.expander("직원별 연차 요약 카드 (전체 직원)", expanded=False):
         render_employee_vacation_cards(df)
 
+if can_edit_vacation():
     with st.expander("📝 연차 사용 입력", expanded=False):
         use_date = st.date_input("사용 날짜 선택", datetime.today(), key="vac_use_date_unique")
         leave_type = st.radio("사용 종류 선택", ["연차", "반차"], horizontal=True, key="vac_leave_type_unique")
@@ -860,6 +865,9 @@ def vacation_page():
                     st.cache_data.clear()
                     st.success("연차 수치 재정리 완료!")
                     st.rerun()
+        else:
+            with st.expander("📝 연차 사용 입력", expanded=False):
+                st.warning("연차 사용 등록은 관리자만 가능합니다.")    
 
     with st.expander("🗂️ 선택 직원 사용일 내역", expanded=False):
         use_list = []
@@ -875,6 +883,7 @@ def vacation_page():
         else:
             st.info("등록된 사용일이 없습니다.")
 
+if can_edit_vacation():
     with st.expander("↩️ 연차 취소", expanded=False):
         use_list = []
         for col in USE_COLS:
@@ -909,10 +918,15 @@ def vacation_page():
                 save_vacation_data(df)
                 st.cache_data.clear()
                 st.success("연차 취소 완료!")
-                st.rerun()
+                st.rerun()       
                 
         else:
             st.info("취소할 사용일이 없습니다.")
+
+else:
+    with st.expander("↩️ 연차 취소", expanded=False):
+        st.warning("연차 취소는 관리자만 가능합니다.")         
+
 
     with st.expander("📁 직원 관리", expanded=False):
         st.markdown("## ➕ 직원 추가")
@@ -1491,7 +1505,7 @@ def schedule_page():
     c5.metric("총 수량", total_qty)
 
     st.divider()
-
+if can_edit_schedule():
     with st.expander("📅 1. 시공 일정 등록", expanded=False):
         with st.form("add_schedule_form_unique"):
 
@@ -1527,6 +1541,9 @@ def schedule_page():
                     save_schedule_data(save_df)
                     st.success("등록 완료!")
                     st.rerun()
+else:
+    with st.expander("📅 1. 시공 일정 등록", expanded=False):
+        st.warning("시공 일정 등록은 관리자 또는 시공팀만 가능합니다.")                   
 
     st.divider()
     with st.expander("📅 2. 오늘 일정", expanded=False):
@@ -1578,7 +1595,7 @@ def schedule_page():
             st.dataframe(show_df, use_container_width=True, hide_index=True)
 
     st.divider()
-
+if can_edit_schedule():
     with st.expander("✏️ 4. 일정 수정", expanded=False):
         if df.empty:
             st.info("수정할 일정이 없습니다.")
@@ -1632,9 +1649,12 @@ def schedule_page():
                     save_schedule_data(save_df)
                     st.success("수정 완료!")
                     st.rerun()
+else:
+    with st.expander("✏️ 4. 일정 수정", expanded=False):
+        st.warning("시공 일정 수정은 관리자 또는 시공팀만 가능합니다.")                    
 
     st.divider()
-
+if can_edit_schedule():
     with st.expander("✅ 5. 완료 처리", expanded=False):
         progress_df = df[df["상태"] == "진행중"].copy()
 
@@ -1656,9 +1676,12 @@ def schedule_page():
                 save_schedule_data(save_df)
                 st.success("완료 처리되었습니다.")
                 st.rerun()
+else:
+    with st.expander("✅ 5. 완료 처리", expanded=False):
+        st.warning("완료 처리는 관리자 또는 시공팀만 가능합니다.")                
 
     st.divider()
-
+if can_edit_schedule():
     with st.expander("↩️ 6. 완료 취소", expanded=False):
         done_df = df[df["상태"] == "완료"].copy()
 
@@ -1680,9 +1703,12 @@ def schedule_page():
                 save_schedule_data(save_df)
                 st.success("완료 취소되었습니다.")
                 st.rerun()
+else:
+    with st.expander("↩️ 6. 완료 취소", expanded=False):
+        st.warning("완료 취소는 관리자 또는 시공팀만 가능합니다.")                
 
     st.divider()
-
+if can_delete_schedule():
     with st.expander("🗑️ 7. 일정 삭제", expanded=False):
         if df.empty:
             st.info("삭제할 일정이 없습니다.")
@@ -1701,6 +1727,9 @@ def schedule_page():
                 save_schedule_data(save_df)
                 st.success("삭제 완료!")
                 st.rerun()
+else:
+    with st.expander("🗑️ 7. 일정 삭제", expanded=False):
+        st.warning("시공 일정 삭제는 관리자만 가능합니다.")                
 
 # =========================================================
 # 4-1. 아이센서 유지보수관리 시스템
