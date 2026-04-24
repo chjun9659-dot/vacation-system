@@ -20,27 +20,12 @@ st.set_page_config(page_title="윤우 통합 운영 시스템", layout="wide")
 # =========================================================
 # 0. 로그인 설정
 # =========================================================
-@st.cache_data(ttl=60)
-def load_user_data():
-    client = get_gspread_client()
-    sheet = client.open("사용자관리").sheet1
-    data = sheet.get_all_records()
-    df = pd.DataFrame(data)
-
-    required_cols = ["아이디", "비밀번호", "권한", "사용여부", "이름"]
-
-    for col in required_cols:
-        if col not in df.columns:
-            df[col] = ""
-
-    df = df[required_cols].copy()
-
-    for col in required_cols:
-        df[col] = df[col].astype(str).str.strip()
-
-    df = df[df["사용여부"].str.upper() == "Y"].copy()
-
-    return df
+USERS = {
+    "admin": {"password": "1234", "role": "관리자"},
+    "staff": {"password": "1234", "role": "직원"},
+    "시공": {"password": "1234", "role": "시공"},
+    "행정": {"password": "1234", "role": "관리자"},
+}
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -83,58 +68,14 @@ def login_screen():
 
         if submitted:
             username = username.strip()
-            try:
-                user_df = load_user_data()
-
-                matched = user_df[
-                    (user_df["아이디"] == username) &
-                    (user_df["비밀번호"] == password)
-                ]
-
-                if not matched.empty:
-                    user = matched.iloc[0]
-
-                    st.session_state.logged_in = True
-                    st.session_state.username = str(user["이름"]).strip() or username
-                    st.session_state.role = str(user["권한"]).strip()
-
-                    st.success("로그인 성공!")
-                    st.rerun()
-                else:
-                    st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
-
-            except Exception as e:
-                st.error(f"사용자 정보를 불러오지 못했습니다: {e}")
-
-def get_role():
-    return st.session_state.get("role", "")
-
-def is_admin():
-    return get_role() == "관리자"
-
-def is_staff():
-    return get_role() == "직원"
-
-def is_construction():
-    return get_role() == "시공"
-
-def is_office():
-    return get_role() == "행정"
-
-def can_edit_vacation():
-    return is_admin()
-
-def can_edit_schedule():
-    return is_admin() or is_construction()
-
-def can_delete_schedule():
-    return is_admin()
-
-def can_edit_inspection():
-    return is_admin() or is_office()
-
-def can_edit_maintenance():
-    return is_admin() or is_office()               
+            if username in USERS and USERS[username]["password"] == password:
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.session_state.role = USERS[username]["role"]
+                st.success("로그인 성공!")
+                st.rerun()
+            else:
+                st.error("아이디 또는 비밀번호가 올바르지 않습니다.")
 
 
 # =========================================================
@@ -748,7 +689,6 @@ def vacation_page():
         st.error(f"연차 파일을 불러오지 못했습니다: {e}")
         return
 
-if can_edit_vacation():
     st.subheader("🛠️ 관리 도구")
 
     tool_col1, tool_col2, tool_col3 = st.columns(3)
@@ -773,9 +713,6 @@ if can_edit_vacation():
         else:
             st.write("백업 파일 수: 0")
 
-else:
-    st.info("연차 관리 도구는 관리자만 사용할 수 있습니다.")
-
     st.subheader("👤 직원 선택")
 
     names = sorted(df["이름"].dropna().astype(str).unique().tolist())
@@ -788,21 +725,22 @@ else:
 
     if not filtered_names:
         st.warning("검색 결과가 없습니다.")
-    else:
-        selected_name = st.selectbox("직원 선택", filtered_names, key="vac_selected_name_unique")
-        employee = df[df["이름"] == selected_name].iloc[0]
+        return
 
-        st.subheader("📊 현재 연차 현황")
+    selected_name = st.selectbox("직원 선택", filtered_names, key="vac_selected_name_unique")
+    employee = df[df["이름"] == selected_name].iloc[0]
 
-        col1, col2, col3 = st.columns(3)
+    st.subheader("📌 현재 연차 현황")
 
-        total = to_number(employee["발생 연차"])
-        used = to_number(employee["사용 연차"])
-        remain = to_number(employee["잔여 연차"])
+    col1, col2, col3 = st.columns(3)
 
-        col1.metric("총 연차", format_leave_number(total))
-        col2.metric("사용 연차", format_leave_number(used))
-        col3.metric("잔여 연차", format_leave_number(remain))
+    total = to_number(employee["발생 연차"])
+    used = to_number(employee["사용 연차"])
+    remain = to_number(employee["잔여 연차"])
+
+    col1.metric("총 연차", format_leave_number(total))
+    col2.metric("사용 연차", format_leave_number(used))
+    col3.metric("잔여 연차", format_leave_number(remain))
 
     if remain <= 0:
         st.error("잔여 연차가 없습니다.")
@@ -815,7 +753,6 @@ else:
     with st.expander("직원별 연차 요약 카드 (전체 직원)", expanded=False):
         render_employee_vacation_cards(df)
 
-if can_edit_vacation():
     with st.expander("📝 연차 사용 입력", expanded=False):
         use_date = st.date_input("사용 날짜 선택", datetime.today(), key="vac_use_date_unique")
         leave_type = st.radio("사용 종류 선택", ["연차", "반차"], horizontal=True, key="vac_leave_type_unique")
@@ -864,9 +801,6 @@ if can_edit_vacation():
                     st.cache_data.clear()
                     st.success("연차 수치 재정리 완료!")
                     st.rerun()
-        else:
-            with st.expander("📝 연차 사용 입력", expanded=False):
-                st.warning("연차 사용 등록은 관리자만 가능합니다.")    
 
     with st.expander("🗂️ 선택 직원 사용일 내역", expanded=False):
         use_list = []
@@ -882,7 +816,6 @@ if can_edit_vacation():
         else:
             st.info("등록된 사용일이 없습니다.")
 
-if can_edit_vacation():
     with st.expander("↩️ 연차 취소", expanded=False):
         use_list = []
         for col in USE_COLS:
@@ -917,15 +850,10 @@ if can_edit_vacation():
                 save_vacation_data(df)
                 st.cache_data.clear()
                 st.success("연차 취소 완료!")
-                st.rerun()       
+                st.rerun()
                 
         else:
             st.info("취소할 사용일이 없습니다.")
-
-else:
-    with st.expander("↩️ 연차 취소", expanded=False):
-        st.warning("연차 취소는 관리자만 가능합니다.")         
-
 
     with st.expander("📁 직원 관리", expanded=False):
         st.markdown("## ➕ 직원 추가")
@@ -1504,7 +1432,7 @@ def schedule_page():
     c5.metric("총 수량", total_qty)
 
     st.divider()
-if can_edit_schedule():
+
     with st.expander("📅 1. 시공 일정 등록", expanded=False):
         with st.form("add_schedule_form_unique"):
 
@@ -1540,9 +1468,6 @@ if can_edit_schedule():
                     save_schedule_data(save_df)
                     st.success("등록 완료!")
                     st.rerun()
-else:
-    with st.expander("📅 1. 시공 일정 등록", expanded=False):
-        st.warning("시공 일정 등록은 관리자 또는 시공팀만 가능합니다.")                   
 
     st.divider()
     with st.expander("📅 2. 오늘 일정", expanded=False):
@@ -1594,7 +1519,7 @@ else:
             st.dataframe(show_df, use_container_width=True, hide_index=True)
 
     st.divider()
-if can_edit_schedule():
+
     with st.expander("✏️ 4. 일정 수정", expanded=False):
         if df.empty:
             st.info("수정할 일정이 없습니다.")
@@ -1648,12 +1573,9 @@ if can_edit_schedule():
                     save_schedule_data(save_df)
                     st.success("수정 완료!")
                     st.rerun()
-else:
-    with st.expander("✏️ 4. 일정 수정", expanded=False):
-        st.warning("시공 일정 수정은 관리자 또는 시공팀만 가능합니다.")                    
 
     st.divider()
-if can_edit_schedule():
+
     with st.expander("✅ 5. 완료 처리", expanded=False):
         progress_df = df[df["상태"] == "진행중"].copy()
 
@@ -1675,12 +1597,9 @@ if can_edit_schedule():
                 save_schedule_data(save_df)
                 st.success("완료 처리되었습니다.")
                 st.rerun()
-else:
-    with st.expander("✅ 5. 완료 처리", expanded=False):
-        st.warning("완료 처리는 관리자 또는 시공팀만 가능합니다.")                
 
     st.divider()
-if can_edit_schedule():
+
     with st.expander("↩️ 6. 완료 취소", expanded=False):
         done_df = df[df["상태"] == "완료"].copy()
 
@@ -1702,12 +1621,9 @@ if can_edit_schedule():
                 save_schedule_data(save_df)
                 st.success("완료 취소되었습니다.")
                 st.rerun()
-else:
-    with st.expander("↩️ 6. 완료 취소", expanded=False):
-        st.warning("완료 취소는 관리자 또는 시공팀만 가능합니다.")                
 
     st.divider()
-if can_delete_schedule():
+
     with st.expander("🗑️ 7. 일정 삭제", expanded=False):
         if df.empty:
             st.info("삭제할 일정이 없습니다.")
@@ -1726,9 +1642,6 @@ if can_delete_schedule():
                 save_schedule_data(save_df)
                 st.success("삭제 완료!")
                 st.rerun()
-else:
-    with st.expander("🗑️ 7. 일정 삭제", expanded=False):
-        st.warning("시공 일정 삭제는 관리자만 가능합니다.")                
 
 # =========================================================
 # 4-1. 아이센서 유지보수관리 시스템
