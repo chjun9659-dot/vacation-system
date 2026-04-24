@@ -788,22 +788,21 @@ else:
 
     if not filtered_names:
         st.warning("검색 결과가 없습니다.")
-        return
+    else:
+        selected_name = st.selectbox("직원 선택", filtered_names, key="vac_selected_name_unique")
+        employee = df[df["이름"] == selected_name].iloc[0]
 
-    selected_name = st.selectbox("직원 선택", filtered_names, key="vac_selected_name_unique")
-    employee = df[df["이름"] == selected_name].iloc[0]
+        st.subheader("📊 현재 연차 현황")
 
-    st.subheader("📌 현재 연차 현황")
+        col1, col2, col3 = st.columns(3)
 
-    col1, col2, col3 = st.columns(3)
+        total = to_number(employee["발생 연차"])
+        used = to_number(employee["사용 연차"])
+        remain = to_number(employee["잔여 연차"])
 
-    total = to_number(employee["발생 연차"])
-    used = to_number(employee["사용 연차"])
-    remain = to_number(employee["잔여 연차"])
-
-    col1.metric("총 연차", format_leave_number(total))
-    col2.metric("사용 연차", format_leave_number(used))
-    col3.metric("잔여 연차", format_leave_number(remain))
+        col1.metric("총 연차", format_leave_number(total))
+        col2.metric("사용 연차", format_leave_number(used))
+        col3.metric("잔여 연차", format_leave_number(remain))
 
     if remain <= 0:
         st.error("잔여 연차가 없습니다.")
